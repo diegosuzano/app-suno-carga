@@ -1,0 +1,16 @@
+streamlit
+pandas
+numpy
+gspread
+google-auth-oauthlib
+openpyxl
+
+
+### Por que cada biblioteca é necessária?
+
+*   **streamlit**: É a base de todo o seu aplicativo web.
+*   **pandas**: Fundamental para manipular os dados em tabelas (DataFrames).
+*   **numpy**: Usado pelo pandas para operações numéricas e para lidar com valores ausentes (`np.nan`).
+*   **gspread**: A biblioteca principal para "conversar" com a API do Google Sheets (ler, escrever, etc.).
+*   **google-auth-oauthlib**: Ajuda o `gspread` a se autenticar de forma segura usando suas credenciais.
+*   **openpyxl**: Embora o foco agora seja o Google Sheets, é uma boa prática mantê-lo, pois o Pandas pode usá-lo como dependência para qualquer funcionalidade relacionada a Excel que possa ser usada internamente.
