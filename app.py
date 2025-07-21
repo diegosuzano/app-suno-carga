@@ -95,6 +95,7 @@ def carregar_dataframe(_worksheet):
         
         df = df[COLUNAS_ESPERADAS]
         df['Data'] = pd.to_datetime(df['Data'], errors='coerce').dt.date
+        df['df_index'] = df.index
         return df.fillna('')
     except Exception as e:
         st.error(f"Erro ao ler dados da planilha: {e}")
@@ -102,13 +103,20 @@ def carregar_dataframe(_worksheet):
 
 # --- FUNÇÕES AUXILIARES ---
 def calcular_tempo(inicio, fim):
-    # >>> INÍCIO DA CORREÇÃO <<<
-    # Garante que, se um dos valores for vazio, o resultado seja vazio, e não "00:00"
     if not inicio or not fim or str(inicio).strip() == '' or str(fim).strip() == '':
         return ""
-    # >>> FIM DA CORREÇÃO <<<
     try:
-        diff = pd.to_datetime(fim) - pd.to_datetime(inicio)
+        # >>> INÍCIO DA CORREÇÃO <<<
+        # Força a conversão para datetime, tratando erros de formato
+        inicio_dt = pd.to_datetime(inicio, errors='coerce')
+        fim_dt = pd.to_datetime(fim, errors='coerce')
+
+        # Se a conversão falhar, retorna vazio
+        if pd.isna(inicio_dt) or pd.isna(fim_dt):
+            return ""
+        # >>> FIM DA CORREÇÃO <<<
+
+        diff = fim_dt - inicio_dt
         if diff.total_seconds() < 0: return "Inválido"
         horas = int(diff.total_seconds() // 3600)
         minutos = int((diff.total_seconds() % 3600) // 60)
@@ -311,39 +319,41 @@ elif st.session_state.pagina_atual == "Editar":
     )
 
     if selecao_label and selecao_label != "Selecione...":
-        df_index = opcoes[selecao_label]
-        st.markdown(f"#### Editando Placa: **{df.loc[df_index, 'Placa do caminhão']}**")
+        df_index_filtrado = opcoes[selecao_label]
+        df_index_real = incompletos.loc[df_index_filtrado, 'df_index']
+        
+        st.markdown(f"#### Editando Placa: **{df.loc[df_index_real, 'Placa do caminhão']}**")
 
         def registrar_agora_edit(campo_a_registrar):
             st.session_state[f"edit_{campo_a_registrar}"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
 
         def salvar_alteracoes():
             with st.spinner("Salvando no Google Sheets..."):
-                df_para_salvar = carregar_dataframe(worksheet)
                 houve_mudanca = False
                 
+                registro_atualizado = df.loc[df_index_real].to_dict()
+
                 for campo in campos_tempo:
                     chave_sessao = f"edit_{campo}"
                     if chave_sessao in st.session_state and st.session_state[chave_sessao]:
-                        df_para_salvar.loc[df_index, campo] = st.session_state[chave_sessao]
+                        registro_atualizado[campo] = st.session_state[chave_sessao]
                         houve_mudanca = True
                 
                 if not houve_mudanca:
                     st.session_state.notification = ("warning", "Nenhuma alteração foi feita.")
                     return
 
-                reg = df_para_salvar.loc[df_index]
-                df_para_salvar.loc[df_index, 'Tempo Espera Doca'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
-                df_para_salvar.loc[df_index, 'Tempo de Carregamento'] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
-                df_para_salvar.loc[df_index, 'Tempo Total'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
-                df_para_salvar.loc[df_index, 'Tempo Percurso Para CD'] = calcular_tempo(reg.get("Saída do pátio"), reg.get("Entrada CD"))
-                df_para_salvar.loc[df_index, 'Tempo Espera Doca CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Encostou na doca CD"))
-                df_para_salvar.loc[df_index, 'Tempo de Descarregamento CD'] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
-                df_para_salvar.loc[df_index, 'Tempo Total CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
+                registro_atualizado['Tempo Espera Doca'] = calcular_tempo(registro_atualizado.get("Entrada na Fábrica"), registro_atualizado.get("Encostou na doca Fábrica"))
+                registro_atualizado['Tempo de Carregamento'] = calcular_tempo(registro_atualizado.get("Início carregamento"), registro_atualizado.get("Fim carregamento"))
+                registro_atualizado['Tempo Total'] = calcular_tempo(registro_atualizado.get("Entrada na Fábrica"), registro_atualizado.get("Saída do pátio"))
+                registro_atualizado['Tempo Percurso Para CD'] = calcular_tempo(registro_atualizado.get("Saída do pátio"), registro_atualizado.get("Entrada CD"))
+                registro_atualizado['Tempo Espera Doca CD'] = calcular_tempo(registro_atualizado.get("Entrada CD"), registro_atualizado.get("Encostou na doca CD"))
+                registro_atualizado['Tempo de Descarregamento CD'] = calcular_tempo(registro_atualizado.get("Início Descarregamento CD"), registro_atualizado.get("Fim Descarregamento CD"))
+                registro_atualizado['Tempo Total CD'] = calcular_tempo(registro_atualizado.get("Entrada CD"), registro_atualizado.get("Saída CD"))
 
                 try:
-                    gsheet_row_index = df_index + 2
-                    valores_para_salvar = [str(df_para_salvar.loc[df_index].get(col, '')) for col in COLUNAS_ESPERADAS]
+                    gsheet_row_index = df_index_real + 2
+                    valores_para_salvar = [str(registro_atualizado.get(col, '')) for col in COLUNAS_ESPERADAS]
                     worksheet.update(f'A{gsheet_row_index}', [valores_para_salvar], value_input_option='USER_ENTERED')
                     st.cache_data.clear()
                     st.session_state.notification = ("success", "Registro atualizado com sucesso!")
@@ -352,7 +362,7 @@ elif st.session_state.pagina_atual == "Editar":
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
         for campo in campos_tempo:
-            valor_a_exibir = st.session_state.get(f"edit_{campo}", df.loc[df_index, campo])
+            valor_a_exibir = st.session_state.get(f"edit_{campo}", df.loc[df_index_real, campo])
 
             if valor_a_exibir and str(valor_a_exibir).strip() != '':
                 st.text_input(
