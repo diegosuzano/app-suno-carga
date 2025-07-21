@@ -102,7 +102,11 @@ def carregar_dataframe(_worksheet):
 
 # --- FUNÇÕES AUXILIARES ---
 def calcular_tempo(inicio, fim):
-    if not inicio or not fim: return ""
+    # >>> INÍCIO DA CORREÇÃO <<<
+    # Garante que, se um dos valores for vazio, o resultado seja vazio, e não "00:00"
+    if not inicio or not fim or str(inicio).strip() == '' or str(fim).strip() == '':
+        return ""
+    # >>> FIM DA CORREÇÃO <<<
     try:
         diff = pd.to_datetime(fim) - pd.to_datetime(inicio)
         if diff.total_seconds() < 0: return "Inválido"
@@ -280,7 +284,7 @@ elif st.session_state.pagina_atual == "Novo":
     st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (LÓGICA DE BOTÃO REESCRITA)
+# PÁGINA DE EDIÇÃO
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -295,7 +299,6 @@ elif st.session_state.pagina_atual == "Editar":
     opcoes = {f"🚛 {row['Placa do caminhão']} | 📅 {row['Data']}": idx for idx, row in incompletos.iterrows()}
     
     def on_selection_change():
-        # Limpa todos os valores temporários de edição ao mudar a seleção
         for key in list(st.session_state.keys()):
             if key.startswith("edit_") or key == "notification":
                 del st.session_state[key]
@@ -311,9 +314,7 @@ elif st.session_state.pagina_atual == "Editar":
         df_index = opcoes[selecao_label]
         st.markdown(f"#### Editando Placa: **{df.loc[df_index, 'Placa do caminhão']}**")
 
-        # >>> INÍCIO DA CORREÇÃO DEFINITIVA <<<
         def registrar_agora_edit(campo_a_registrar):
-            # Esta função agora sabe exatamente qual campo registrar
             st.session_state[f"edit_{campo_a_registrar}"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
 
         def salvar_alteracoes():
@@ -350,37 +351,32 @@ elif st.session_state.pagina_atual == "Editar":
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
-        # Loop para desenhar os widgets na tela
         for campo in campos_tempo:
-            # Pega o valor da memória (se foi clicado "Agora") ou da planilha
             valor_a_exibir = st.session_state.get(f"edit_{campo}", df.loc[df_index, campo])
 
             if valor_a_exibir and str(valor_a_exibir).strip() != '':
-                # Se já tem valor, mostra um campo de texto desabilitado
                 st.text_input(
                     label=f"✅ {campo}", 
                     value=valor_a_exibir, 
                     disabled=True, 
-                    key=f"input_edit_disabled_{campo}" # Chave única
+                    key=f"input_edit_disabled_{campo}"
                 )
             else:
-                # Se não tem valor, mostra um campo vazio e o botão "Agora"
                 col1, col2 = st.columns([3, 1])
                 with col1:
                     st.text_input(
                         label=f"📋 {campo}", 
                         value="", 
                         disabled=True, 
-                        key=f"input_edit_enabled_{campo}" # Chave única
+                        key=f"input_edit_enabled_{campo}"
                     )
                 with col2:
                     st.button(
                         "⏰ Agora", 
-                        key=f"btn_now_edit_{campo}", # Chave única para o botão
+                        key=f"btn_now_edit_{campo}",
                         on_click=registrar_agora_edit, 
-                        args=(campo,) # Passa o nome do campo para a função
+                        args=(campo,)
                     )
-        # >>> FIM DA CORREÇÃO DEFINITIVA <<<
         
         st.markdown("---")
         
