@@ -280,7 +280,7 @@ elif st.session_state.pagina_atual == "Novo":
     st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO
+# PÁGINA DE EDIÇÃO (COM LÓGICA DE BOTÃO CORRIGIDA)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -296,7 +296,7 @@ elif st.session_state.pagina_atual == "Editar":
     
     def on_selection_change():
         for key in list(st.session_state.keys()):
-            if key.startswith("edit_") or key == "notification":
+            if key.startswith("edit_") or key == "notification" or key.startswith("btn_now_"):
                 del st.session_state[key]
 
     selecao_label = st.selectbox(
@@ -310,8 +310,22 @@ elif st.session_state.pagina_atual == "Editar":
         df_index = opcoes[selecao_label]
         st.markdown(f"#### Editando Placa: **{df.loc[df_index, 'Placa do caminhão']}**")
 
-        def registrar_agora_edit(campo):
-            st.session_state[f"edit_{campo}"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+        # >>> INÍCIO DA CORREÇÃO DEFINITIVA <<<
+        # 1. Primeiro, verificamos se algum botão "Agora" foi pressionado no último ciclo.
+        campo_clicado = None
+        for campo in campos_tempo:
+            # Usamos uma chave única e segura para cada botão
+            if st.session_state.get(f"btn_now_edit_{campo}"):
+                campo_clicado = campo
+                # Limpamos o estado do botão para evitar que ele seja "pressionado" para sempre
+                del st.session_state[f"btn_now_edit_{campo}"] 
+                break
+        
+        # 2. Se um botão foi clicado, atualizamos o valor na memória e recarregamos a página.
+        if campo_clicado:
+            st.session_state[f"edit_{campo_clicado}"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+            st.rerun()
+        # >>> FIM DA CORREÇÃO DEFINITIVA <<<
 
         def salvar_alteracoes():
             with st.spinner("Salvando no Google Sheets..."):
@@ -347,19 +361,22 @@ elif st.session_state.pagina_atual == "Editar":
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
+        # 3. Agora, desenhamos os widgets na tela.
         for campo in campos_tempo:
             valor_original = df.loc[df_index, campo]
-            if valor_original and str(valor_original).strip() != '':
-                st.text_input(f"✅ {campo}", value=valor_original, disabled=True, key=f"disp_{campo}")
+            # O valor a ser exibido é o que está na memória (se existir) ou o original da planilha.
+            valor_a_exibir = st.session_state.get(f"edit_{campo}", valor_original)
+
+            if valor_a_exibir and str(valor_a_exibir).strip() != '':
+                st.text_input(f"✅ {campo}", value=valor_a_exibir, disabled=True, key=f"disp_{campo}")
             else:
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.text_input(f"📋 {campo}", key=f"edit_{campo}")
+                    # O text_input agora é apenas para exibição, o valor é controlado pelo botão.
+                    st.text_input(f"📋 {campo}", value="", disabled=True, key=f"edit_input_{campo}")
                 with col2:
-                    # >>> INÍCIO DA CORREÇÃO DA CHAVE <<<
-                    # A chave do botão agora é única para cada campo, usando o próprio nome do campo.
-                    st.button("⏰ Agora", key=f"btn_now_{campo}", on_click=registrar_agora_edit, args=(campo,))
-                    # >>> FIM DA CORREÇÃO DA CHAVE <<<
+                    # Usamos a chave única e segura para o botão
+                    st.button("⏰ Agora", key=f"btn_now_edit_{campo}")
         
         st.markdown("---")
         
