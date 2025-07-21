@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 
 # --- CONFIGURAÇÕES GERAIS ---
 NOME_PLANILHA = "Controle de Carga Suzano" # O nome exato da sua Planilha Google
-FUSO_HORARIO = timezone(timedelta(hours=-3 ))
+FUSO_HORARIO = timezone(timedelta(hours=-3))
 
 campos_tempo = [
     "Entrada na Fábrica", "Encostou na doca Fábrica", "Início carregamento",
@@ -62,13 +62,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True) 
 
-# --- FUNÇÕES DE CONEXÃO E DADOS (AGORA COM GOOGLE SHEETS) ---
+# --- FUNÇÕES DE CONEXÃO E DADOS (COM CORREÇÃO DE ESCOPO) ---
 @st.cache_resource(show_spinner="Conectando ao Google Sheets...")
 def connect_to_google_sheets():
     try:
+        # >>> CORREÇÃO DEFINITIVA: Adiciona os escopos necessários <<<
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
-            scopes=["https://www.googleapis.com/auth/spreadsheets"]
+            scopes=scopes
          )
         client = gspread.authorize(creds)
         spreadsheet = client.open(NOME_PLANILHA)
@@ -81,23 +86,22 @@ def connect_to_google_sheets():
 def carregar_dataframe(_worksheet):
     if _worksheet is None: return pd.DataFrame(columns=COLUNAS_ESPERADAS)
     try:
-        # Usamos get_all_values para evitar problemas com colunas vazias
         data = _worksheet.get_all_values()
-        if not data:
+        if len(data) < 2: # Se não tiver dados além do cabeçalho
             return pd.DataFrame(columns=COLUNAS_ESPERADAS)
         
         df = pd.DataFrame(data[1:], columns=data[0]).astype(str)
         for col in COLUNAS_ESPERADAS:
             if col not in df.columns: df[col] = ''
         
-        df = df[COLUNAS_ESPERADAS] # Garante a ordem correta
+        df = df[COLUNAS_ESPERADAS]
         df['Data'] = pd.to_datetime(df['Data'], errors='coerce').dt.date
         return df.fillna('')
     except Exception as e:
         st.error(f"Erro ao ler dados da planilha: {e}")
         return pd.DataFrame(columns=COLUNAS_ESPERADAS)
 
-# --- FUNÇÕES AUXILIARES (NÃO MUDAM) ---
+# --- FUNÇÕES AUXILIARES ---
 def calcular_tempo(inicio, fim):
     if not inicio or not fim: return ""
     try:
@@ -128,7 +132,7 @@ worksheet = connect_to_google_sheets()
 st.markdown("<div class='main-header'>🚚 Suzano - Controle de Transferência de Carga</div>", unsafe_allow_html=True)
 
 # =============================================================================
-# TELA INICIAL
+# TELA INICIAL (COM DASHBOARD COMPLETO)
 # =============================================================================
 if st.session_state.pagina_atual == "Tela Inicial":
     st.markdown("<div class='section-header'>MENU DE AÇÕES</div>", unsafe_allow_html=True)
@@ -136,8 +140,6 @@ if st.session_state.pagina_atual == "Tela Inicial":
     with col1:
         if st.button("🆕 NOVO REGISTRO", use_container_width=True):
             st.session_state.pagina_atual = "Novo"
-            for key in list(st.session_state.keys()):
-                if key.startswith("novo_"): del st.session_state[key]
             st.rerun()
         if st.button("📊 EM OPERAÇÃO", use_container_width=True):
             st.session_state.pagina_atual = "Em Operação"
@@ -218,6 +220,12 @@ elif st.session_state.pagina_atual == "Novo":
     botao_voltar()
     st.markdown("### 🆕 Novo Registro de Transferência")
 
+    if st.session_state.get("notification"):
+        msg_type, msg_text = st.session_state.notification
+        if msg_type == "success": st.success(msg_text)
+        else: st.error(msg_text)
+        del st.session_state.notification
+
     def registrar_agora(campo):
         st.session_state[f"novo_{campo}"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -227,6 +235,7 @@ elif st.session_state.pagina_atual == "Novo":
 
         if not placa or not conferente:
             st.session_state.notification = ("error", "Placa e Conferente são obrigatórios para salvar.")
+            st.rerun()
             return
 
         with st.spinner("Salvando no Google Sheets..."):
@@ -256,6 +265,7 @@ elif st.session_state.pagina_atual == "Novo":
                     if key.startswith("novo_"): del st.session_state[key]
             except Exception as e:
                 st.session_state.notification = ("error", f"Falha ao salvar: {e}")
+            st.rerun()
 
     st.text_input("🚛 Placa do Caminhão", key="novo_placa")
     st.text_input("👤 Nome do Conferente", key="novo_conferente")
@@ -268,14 +278,6 @@ elif st.session_state.pagina_atual == "Novo":
             st.button(f"Registrar {campo}", key=f"btn_novo_{campo}", on_click=registrar_agora, args=(campo,))
     
     st.markdown("---")
-    
-    notification_placeholder = st.empty()
-    if st.session_state.get("notification"):
-        msg_type, msg_text = st.session_state.notification
-        if msg_type == "success": notification_placeholder.success(msg_text)
-        else: notification_placeholder.error(msg_text)
-        del st.session_state.notification
-
     st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
 
 # =============================================================================
@@ -284,6 +286,13 @@ elif st.session_state.pagina_atual == "Novo":
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
     st.markdown("### ✏️ Editar Registros Incompletos")
+
+    if st.session_state.get("notification"):
+        msg_type, msg_text = st.session_state.notification
+        if msg_type == "success": st.success(msg_text)
+        elif msg_type == "warning": st.warning(msg_text)
+        else: st.error(msg_text)
+        del st.session_state.notification
 
     df = carregar_dataframe(worksheet)
     incompletos = df[df["Saída CD"] == ''].copy()
@@ -325,6 +334,7 @@ elif st.session_state.pagina_atual == "Editar":
                 
                 if not houve_mudanca:
                     st.session_state.notification = ("warning", "Nenhuma alteração foi feita.")
+                    st.rerun()
                     return
 
                 reg = df_para_salvar.loc[df_index]
@@ -345,6 +355,7 @@ elif st.session_state.pagina_atual == "Editar":
                     on_selection_change()
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
+                st.rerun()
 
         for campo in campos_tempo:
             valor_original = df.loc[df_index, campo]
@@ -358,15 +369,6 @@ elif st.session_state.pagina_atual == "Editar":
                     st.button("⏰ Agora", key=f"btn_now_{campo}", on_click=registrar_agora_edit, args=(campo,))
         
         st.markdown("---")
-        
-        notification_placeholder_edit = st.empty()
-        if st.session_state.get("notification"):
-            msg_type, msg_text = st.session_state.notification
-            if msg_type == "success": notification_placeholder_edit.success(msg_text)
-            elif msg_type == "warning": notification_placeholder_edit.warning(msg_text)
-            else: notification_placeholder_edit.error(msg_text)
-            del st.session_state.notification
-
         st.button("💾 SALVAR ALTERAÇÕES", on_click=salvar_alteracoes, use_container_width=True, type="primary")
 
 # =============================================================================
@@ -385,4 +387,3 @@ elif st.session_state.pagina_atual in ["Em Operação", "Finalizadas"]:
         st.markdown("### ✅ Registros Finalizados")
         subset_df = df[df["Saída CD"] != ''].copy()
         st.dataframe(subset_df)
-
