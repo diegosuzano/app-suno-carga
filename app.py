@@ -106,15 +106,11 @@ def calcular_tempo(inicio, fim):
     if not inicio or not fim or str(inicio).strip() == '' or str(fim).strip() == '':
         return ""
     try:
-        # >>> INÍCIO DA CORREÇÃO <<<
-        # Força a conversão para datetime, tratando erros de formato
         inicio_dt = pd.to_datetime(inicio, errors='coerce')
         fim_dt = pd.to_datetime(fim, errors='coerce')
 
-        # Se a conversão falhar, retorna vazio
         if pd.isna(inicio_dt) or pd.isna(fim_dt):
             return ""
-        # >>> FIM DA CORREÇÃO <<<
 
         diff = fim_dt - inicio_dt
         if diff.total_seconds() < 0: return "Inválido"
@@ -132,8 +128,9 @@ def obter_status(registro):
 def botao_voltar():
     if st.button("⬅️ Voltar ao Menu Principal"):
         st.session_state.pagina_atual = "Tela Inicial"
+        # Limpa o estado da sessão para garantir que não haja lixo
         for key in list(st.session_state.keys()):
-            if key.startswith("edit_") or key.startswith("novo_") or key == "notification":
+            if key not in ['pagina_atual']: # Preserva apenas o controle da página
                 del st.session_state[key]
         st.rerun()
 
@@ -232,67 +229,73 @@ elif st.session_state.pagina_atual == "Novo":
     botao_voltar()
     st.markdown("### 🆕 Novo Registro de Transferência")
 
-    def registrar_agora(campo):
-        st.session_state[f"novo_{campo}"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+    if 'novo_registro_dict' not in st.session_state:
+        st.session_state.novo_registro_dict = {}
+
+    def registrar_agora_novo(campo):
+        st.session_state.novo_registro_dict[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
 
     def salvar_novo_registro():
-        placa = st.session_state.get("novo_placa")
-        conferente = st.session_state.get("novo_conferente")
+        placa = st.session_state.novo_registro_dict.get("Placa do caminhão")
+        conferente = st.session_state.novo_registro_dict.get("Nome do conferente")
 
         if not placa or not conferente:
             st.session_state.notification = ("error", "Placa e Conferente são obrigatórios para salvar.")
             return
 
         with st.spinner("Salvando no Google Sheets..."):
-            nova_linha_dict = {
-                "Data": datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d'),
-                "Placa do caminhão": placa,
-                "Nome do conferente": conferente
-            }
-            for campo in campos_tempo:
-                nova_linha_dict[campo] = st.session_state.get(f"novo_{campo}", '')
+            # Adiciona a data atual ao dicionário
+            st.session_state.novo_registro_dict['Data'] = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
+            
+            # Calcula os tempos
+            st.session_state.novo_registro_dict['Tempo Espera Doca'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada na Fábrica"), st.session_state.novo_registro_dict.get("Encostou na doca Fábrica"))
+            st.session_state.novo_registro_dict['Tempo de Carregamento'] = calcular_tempo(st.session_state.novo_registro_dict.get("Início carregamento"), st.session_state.novo_registro_dict.get("Fim carregamento"))
+            st.session_state.novo_registro_dict['Tempo Total'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada na Fábrica"), st.session_state.novo_registro_dict.get("Saída do pátio"))
+            st.session_state.novo_registro_dict['Tempo Percurso Para CD'] = calcular_tempo(st.session_state.novo_registro_dict.get("Saída do pátio"), st.session_state.novo_registro_dict.get("Entrada CD"))
+            st.session_state.novo_registro_dict['Tempo Espera Doca CD'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada CD"), st.session_state.novo_registro_dict.get("Encostou na doca CD"))
+            st.session_state.novo_registro_dict['Tempo de Descarregamento CD'] = calcular_tempo(st.session_state.novo_registro_dict.get("Início Descarregamento CD"), st.session_state.novo_registro_dict.get("Fim Descarregamento CD"))
+            st.session_state.novo_registro_dict['Tempo Total CD'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada CD"), st.session_state.novo_registro_dict.get("Saída CD"))
 
-            nova_linha_dict['Tempo Espera Doca'] = calcular_tempo(nova_linha_dict.get("Entrada na Fábrica"), nova_linha_dict.get("Encostou na doca Fábrica"))
-            nova_linha_dict['Tempo de Carregamento'] = calcular_tempo(nova_linha_dict.get("Início carregamento"), nova_linha_dict.get("Fim carregamento"))
-            nova_linha_dict['Tempo Total'] = calcular_tempo(nova_linha_dict.get("Entrada na Fábrica"), nova_linha_dict.get("Saída do pátio"))
-            nova_linha_dict['Tempo Percurso Para CD'] = calcular_tempo(nova_linha_dict.get("Saída do pátio"), nova_linha_dict.get("Entrada CD"))
-            nova_linha_dict['Tempo Espera Doca CD'] = calcular_tempo(nova_linha_dict.get("Entrada CD"), nova_linha_dict.get("Encostou na doca CD"))
-            nova_linha_dict['Tempo de Descarregamento CD'] = calcular_tempo(nova_linha_dict.get("Início Descarregamento CD"), nova_linha_dict.get("Fim Descarregamento CD"))
-            nova_linha_dict['Tempo Total CD'] = calcular_tempo(nova_linha_dict.get("Entrada CD"), nova_linha_dict.get("Saída CD"))
-
-            nova_linha_lista = [str(nova_linha_dict.get(col, '')) for col in COLUNAS_ESPERADAS]
+            # Prepara a lista na ordem correta das colunas
+            nova_linha_lista = [str(st.session_state.novo_registro_dict.get(col, '')) for col in COLUNAS_ESPERADAS]
             
             try:
                 worksheet.append_row(nova_linha_lista, value_input_option='USER_ENTERED')
                 st.cache_data.clear()
                 st.session_state.notification = ("success", "Novo registro salvo com sucesso!")
-                for key in list(st.session_state.keys()):
-                    if key.startswith("novo_"): del st.session_state[key]
+                del st.session_state.novo_registro_dict # Limpa o dicionário para o próximo registro
             except Exception as e:
                 st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
-    st.text_input("🚛 Placa do Caminhão", key="novo_placa")
-    st.text_input("👤 Nome do Conferente", key="novo_conferente")
+    # Widgets para placa e conferente
+    placa = st.text_input("🚛 Placa do Caminhão", value=st.session_state.novo_registro_dict.get("Placa do caminhão", ""), key="placa_novo")
+    conferente = st.text_input("👤 Nome do Conferente", value=st.session_state.novo_registro_dict.get("Nome do conferente", ""), key="conferente_novo")
+    st.session_state.novo_registro_dict["Placa do caminhão"] = placa
+    st.session_state.novo_registro_dict["Nome do conferente"] = conferente
     st.markdown("---")
 
+    # Widgets para os campos de tempo
     for campo in campos_tempo:
-        if st.session_state.get(f"novo_{campo}"):
-            st.success(f"✅ {campo}: {st.session_state[f'novo_{campo}']}")
+        if st.session_state.novo_registro_dict.get(campo):
+            st.success(f"✅ {campo}: {st.session_state.novo_registro_dict[campo]}")
         else:
-            st.button(f"Registrar {campo}", key=f"btn_novo_{campo}", on_click=registrar_agora, args=(campo,))
+            st.button(f"Registrar {campo}", key=f"btn_novo_{campo}", on_click=registrar_agora_novo, args=(campo,))
     
     st.markdown("---")
     
-    if st.session_state.get("notification"):
-        msg_type, msg_text = st.session_state.notification
-        if msg_type == "success": st.success(msg_text)
-        else: st.error(msg_text)
-        del st.session_state.notification
-
-    st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
+    # Botão de salvar e notificação
+    col_btn, col_msg = st.columns([1, 2])
+    with col_btn:
+        st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
+    with col_msg:
+        if st.session_state.get("notification"):
+            msg_type, msg_text = st.session_state.notification
+            if msg_type == "success": st.success(msg_text)
+            else: st.error(msg_text)
+            del st.session_state.notification
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO
+# PÁGINA DE EDIÇÃO (LÓGICA REESCRITA)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -306,68 +309,69 @@ elif st.session_state.pagina_atual == "Editar":
 
     opcoes = {f"🚛 {row['Placa do caminhão']} | 📅 {row['Data']}": idx for idx, row in incompletos.iterrows()}
     
-    def on_selection_change():
-        for key in list(st.session_state.keys()):
-            if key.startswith("edit_") or key == "notification":
-                del st.session_state[key]
+    def carregar_registro_para_edicao():
+        # Pega o valor selecionado no selectbox
+        selecao_atual = st.session_state.selectbox_edicao
+        if selecao_atual != "Selecione...":
+            # Encontra o índice real do dataframe
+            df_index_filtrado = opcoes[selecao_atual]
+            df_index_real = incompletos.loc[df_index_filtrado, 'df_index']
+            # Carrega a linha inteira como um dicionário para a memória
+            st.session_state.registro_em_edicao = df.loc[df_index_real].to_dict()
+        else:
+            if 'registro_em_edicao' in st.session_state:
+                del st.session_state.registro_em_edicao
 
     selecao_label = st.selectbox(
         "Selecione um registro para editar:",
         options=["Selecione..."] + list(opcoes.keys()),
         key="selectbox_edicao",
-        on_change=on_selection_change
+        on_change=carregar_registro_para_edicao
     )
 
-    if selecao_label and selecao_label != "Selecione...":
-        df_index_filtrado = opcoes[selecao_label]
-        df_index_real = incompletos.loc[df_index_filtrado, 'df_index']
-        
-        st.markdown(f"#### Editando Placa: **{df.loc[df_index_real, 'Placa do caminhão']}**")
+    # Só continua se um registro válido estiver carregado na memória
+    if 'registro_em_edicao' in st.session_state:
+        reg = st.session_state.registro_em_edicao
+        st.markdown(f"#### Editando Placa: **{reg['Placa do caminhão']}**")
 
         def registrar_agora_edit(campo_a_registrar):
-            st.session_state[f"edit_{campo_a_registrar}"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+            # Modifica diretamente o dicionário na memória
+            st.session_state.registro_em_edicao[campo_a_registrar] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
 
         def salvar_alteracoes():
             with st.spinner("Salvando no Google Sheets..."):
-                houve_mudanca = False
+                # Pega o registro já atualizado da memória
+                registro_para_salvar = st.session_state.registro_em_edicao
                 
-                registro_atualizado = df.loc[df_index_real].to_dict()
-
-                for campo in campos_tempo:
-                    chave_sessao = f"edit_{campo}"
-                    if chave_sessao in st.session_state and st.session_state[chave_sessao]:
-                        registro_atualizado[campo] = st.session_state[chave_sessao]
-                        houve_mudanca = True
-                
-                if not houve_mudanca:
-                    st.session_state.notification = ("warning", "Nenhuma alteração foi feita.")
-                    return
-
-                registro_atualizado['Tempo Espera Doca'] = calcular_tempo(registro_atualizado.get("Entrada na Fábrica"), registro_atualizado.get("Encostou na doca Fábrica"))
-                registro_atualizado['Tempo de Carregamento'] = calcular_tempo(registro_atualizado.get("Início carregamento"), registro_atualizado.get("Fim carregamento"))
-                registro_atualizado['Tempo Total'] = calcular_tempo(registro_atualizado.get("Entrada na Fábrica"), registro_atualizado.get("Saída do pátio"))
-                registro_atualizado['Tempo Percurso Para CD'] = calcular_tempo(registro_atualizado.get("Saída do pátio"), registro_atualizado.get("Entrada CD"))
-                registro_atualizado['Tempo Espera Doca CD'] = calcular_tempo(registro_atualizado.get("Entrada CD"), registro_atualizado.get("Encostou na doca CD"))
-                registro_atualizado['Tempo de Descarregamento CD'] = calcular_tempo(registro_atualizado.get("Início Descarregamento CD"), registro_atualizado.get("Fim Descarregamento CD"))
-                registro_atualizado['Tempo Total CD'] = calcular_tempo(registro_atualizado.get("Entrada CD"), registro_atualizado.get("Saída CD"))
+                # Recalcula todos os tempos com base nos dados mais recentes
+                registro_para_salvar['Tempo Espera Doca'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Encostou na doca Fábrica"))
+                registro_para_salvar['Tempo de Carregamento'] = calcular_tempo(registro_para_salvar.get("Início carregamento"), registro_para_salvar.get("Fim carregamento"))
+                registro_para_salvar['Tempo Total'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Saída do pátio"))
+                registro_para_salvar['Tempo Percurso Para CD'] = calcular_tempo(registro_para_salvar.get("Saída do pátio"), registro_para_salvar.get("Entrada CD"))
+                registro_para_salvar['Tempo Espera Doca CD'] = calcular_tempo(registro_para_salvar.get("Entrada CD"), registro_para_salvar.get("Encostou na doca CD"))
+                registro_para_salvar['Tempo de Descarregamento CD'] = calcular_tempo(registro_para_salvar.get("Início Descarregamento CD"), registro_para_salvar.get("Fim Descarregamento CD"))
+                registro_para_salvar['Tempo Total CD'] = calcular_tempo(registro_para_salvar.get("Entrada CD"), registro_para_salvar.get("Saída CD"))
 
                 try:
-                    gsheet_row_index = df_index_real + 2
-                    valores_para_salvar = [str(registro_atualizado.get(col, '')) for col in COLUNAS_ESPERADAS]
+                    gsheet_row_index = reg['df_index'] + 2
+                    valores_para_salvar = [str(registro_para_salvar.get(col, '')) for col in COLUNAS_ESPERADAS]
                     worksheet.update(f'A{gsheet_row_index}', [valores_para_salvar], value_input_option='USER_ENTERED')
                     st.cache_data.clear()
                     st.session_state.notification = ("success", "Registro atualizado com sucesso!")
-                    on_selection_change()
+                    # Limpa o registro da memória para forçar a recarga
+                    del st.session_state.registro_em_edicao
+                    st.session_state.selectbox_edicao = "Selecione..."
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
+        # Loop para desenhar os widgets na tela
         for campo in campos_tempo:
-            valor_a_exibir = st.session_state.get(f"edit_{campo}", df.loc[df_index_real, campo])
+            valor_a_exibir = reg.get(campo, '')
 
             if valor_a_exibir and str(valor_a_exibir).strip() != '':
                 st.text_input(
                     label=f"✅ {campo}", 
-                    value=valor_a_exibir, 
+                    value=str(valor_a_exibir), 
                     disabled=True, 
                     key=f"input_edit_disabled_{campo}"
                 )
@@ -390,14 +394,16 @@ elif st.session_state.pagina_atual == "Editar":
         
         st.markdown("---")
         
-        if st.session_state.get("notification"):
-            msg_type, msg_text = st.session_state.notification
-            if msg_type == "success": st.success(msg_text)
-            elif msg_type == "warning": st.warning(msg_text)
-            else: st.error(msg_text)
-            del st.session_state.notification
-
-        st.button("💾 SALVAR ALTERAÇÕES", on_click=salvar_alteracoes, use_container_width=True, type="primary")
+        col_btn_edit, col_msg_edit = st.columns([1, 2])
+        with col_btn_edit:
+            st.button("💾 SALVAR ALTERAÇÕES", on_click=salvar_alteracoes, use_container_width=True, type="primary")
+        with col_msg_edit:
+            if st.session_state.get("notification"):
+                msg_type, msg_text = st.session_state.notification
+                if msg_type == "success": st.success(msg_text)
+                elif msg_type == "warning": st.warning(msg_text)
+                else: st.error(msg_text)
+                del st.session_state.notification
 
 # =============================================================================
 # OUTRAS PÁGINAS
