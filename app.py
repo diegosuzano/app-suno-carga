@@ -240,7 +240,6 @@ elif st.session_state.pagina_atual == "Novo":
             for campo in campos_tempo:
                 nova_linha_dict[campo] = st.session_state.get(f"novo_{campo}", '')
 
-            # >>> INÍCIO DA CORREÇÃO DOS CÁLCULOS <<<
             nova_linha_dict['Tempo Espera Doca'] = calcular_tempo(nova_linha_dict.get("Entrada na Fábrica"), nova_linha_dict.get("Encostou na doca Fábrica"))
             nova_linha_dict['Tempo de Carregamento'] = calcular_tempo(nova_linha_dict.get("Início carregamento"), nova_linha_dict.get("Fim carregamento"))
             nova_linha_dict['Tempo Total'] = calcular_tempo(nova_linha_dict.get("Entrada na Fábrica"), nova_linha_dict.get("Saída do pátio"))
@@ -248,7 +247,6 @@ elif st.session_state.pagina_atual == "Novo":
             nova_linha_dict['Tempo Espera Doca CD'] = calcular_tempo(nova_linha_dict.get("Entrada CD"), nova_linha_dict.get("Encostou na doca CD"))
             nova_linha_dict['Tempo de Descarregamento CD'] = calcular_tempo(nova_linha_dict.get("Início Descarregamento CD"), nova_linha_dict.get("Fim Descarregamento CD"))
             nova_linha_dict['Tempo Total CD'] = calcular_tempo(nova_linha_dict.get("Entrada CD"), nova_linha_dict.get("Saída CD"))
-            # >>> FIM DA CORREÇÃO DOS CÁLCULOS <<<
 
             nova_linha_lista = [str(nova_linha_dict.get(col, '')) for col in COLUNAS_ESPERADAS]
             
@@ -331,7 +329,6 @@ elif st.session_state.pagina_atual == "Editar":
                     return
 
                 reg = df_para_salvar.loc[df_index]
-                # >>> INÍCIO DA CORREÇÃO DOS CÁLCULOS <<<
                 df_para_salvar.loc[df_index, 'Tempo Espera Doca'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
                 df_para_salvar.loc[df_index, 'Tempo de Carregamento'] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
                 df_para_salvar.loc[df_index, 'Tempo Total'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
@@ -339,7 +336,6 @@ elif st.session_state.pagina_atual == "Editar":
                 df_para_salvar.loc[df_index, 'Tempo Espera Doca CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Encostou na doca CD"))
                 df_para_salvar.loc[df_index, 'Tempo de Descarregamento CD'] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
                 df_para_salvar.loc[df_index, 'Tempo Total CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
-                # >>> FIM DA CORREÇÃO DOS CÁLCULOS <<<
 
                 try:
                     gsheet_row_index = df_index + 2
@@ -360,7 +356,10 @@ elif st.session_state.pagina_atual == "Editar":
                 with col1:
                     st.text_input(f"📋 {campo}", key=f"edit_{campo}")
                 with col2:
+                    # >>> INÍCIO DA CORREÇÃO DA CHAVE <<<
+                    # A chave do botão agora é única para cada campo, usando o próprio nome do campo.
                     st.button("⏰ Agora", key=f"btn_now_{campo}", on_click=registrar_agora_edit, args=(campo,))
+                    # >>> FIM DA CORREÇÃO DA CHAVE <<<
         
         st.markdown("---")
         
