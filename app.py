@@ -6,7 +6,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # --- CONFIGURAÇÕES GERAIS ---
-NOME_PLANILHA = "Controle de Carga Suzano" # O nome exato da sua Planilha Google
+NOME_PLANILHA = "Controle de Carga Suzano"
 FUSO_HORARIO = timezone(timedelta(hours=-3))
 
 campos_tempo = [
@@ -16,8 +16,8 @@ campos_tempo = [
     "Fim Descarregamento CD", "Saída CD"
 ]
 campos_calculados = [
-    "Tempo Espera Doca", "Tempo Total", "Tempo de Descarregamento CD",
-    "Tempo Espera Doca CD", "Tempo Total CD", "Tempo Percurso Para CD", "Tempo de Carregamento"
+    "Tempo Espera Doca", "Tempo de Carregamento", "Tempo Total", 
+    "Tempo Percurso Para CD", "Tempo Espera Doca CD", "Tempo de Descarregamento CD", "Tempo Total CD"
 ]
 COLUNAS_ESPERADAS = ["Data", "Placa do caminhão", "Nome do conferente"] + campos_tempo + campos_calculados
 
@@ -62,11 +62,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True) 
 
-# --- FUNÇÕES DE CONEXÃO E DADOS (COM CORREÇÃO DE ESCOPO) ---
+# --- FUNÇÕES DE CONEXÃO E DADOS ---
 @st.cache_resource(show_spinner="Conectando ao Google Sheets...")
 def connect_to_google_sheets():
     try:
-        # >>> CORREÇÃO DEFINITIVA: Adiciona os escopos necessários <<<
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
@@ -87,7 +86,7 @@ def carregar_dataframe(_worksheet):
     if _worksheet is None: return pd.DataFrame(columns=COLUNAS_ESPERADAS)
     try:
         data = _worksheet.get_all_values()
-        if len(data) < 2: # Se não tiver dados além do cabeçalho
+        if len(data) < 2:
             return pd.DataFrame(columns=COLUNAS_ESPERADAS)
         
         df = pd.DataFrame(data[1:], columns=data[0]).astype(str)
@@ -106,6 +105,7 @@ def calcular_tempo(inicio, fim):
     if not inicio or not fim: return ""
     try:
         diff = pd.to_datetime(fim) - pd.to_datetime(inicio)
+        if diff.total_seconds() < 0: return "Inválido"
         horas = int(diff.total_seconds() // 3600)
         minutos = int((diff.total_seconds() % 3600) // 60)
         return f"{horas:02d}:{minutos:02d}"
@@ -132,7 +132,7 @@ worksheet = connect_to_google_sheets()
 st.markdown("<div class='main-header'>🚚 Suzano - Controle de Transferência de Carga</div>", unsafe_allow_html=True)
 
 # =============================================================================
-# TELA INICIAL (COM DASHBOARD COMPLETO)
+# TELA INICIAL
 # =============================================================================
 if st.session_state.pagina_atual == "Tela Inicial":
     st.markdown("<div class='section-header'>MENU DE AÇÕES</div>", unsafe_allow_html=True)
@@ -220,12 +220,6 @@ elif st.session_state.pagina_atual == "Novo":
     botao_voltar()
     st.markdown("### 🆕 Novo Registro de Transferência")
 
-    if st.session_state.get("notification"):
-        msg_type, msg_text = st.session_state.notification
-        if msg_type == "success": st.success(msg_text)
-        else: st.error(msg_text)
-        del st.session_state.notification
-
     def registrar_agora(campo):
         st.session_state[f"novo_{campo}"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -235,7 +229,6 @@ elif st.session_state.pagina_atual == "Novo":
 
         if not placa or not conferente:
             st.session_state.notification = ("error", "Placa e Conferente são obrigatórios para salvar.")
-            st.rerun()
             return
 
         with st.spinner("Salvando no Google Sheets..."):
@@ -247,6 +240,7 @@ elif st.session_state.pagina_atual == "Novo":
             for campo in campos_tempo:
                 nova_linha_dict[campo] = st.session_state.get(f"novo_{campo}", '')
 
+            # >>> INÍCIO DA CORREÇÃO DOS CÁLCULOS <<<
             nova_linha_dict['Tempo Espera Doca'] = calcular_tempo(nova_linha_dict.get("Entrada na Fábrica"), nova_linha_dict.get("Encostou na doca Fábrica"))
             nova_linha_dict['Tempo de Carregamento'] = calcular_tempo(nova_linha_dict.get("Início carregamento"), nova_linha_dict.get("Fim carregamento"))
             nova_linha_dict['Tempo Total'] = calcular_tempo(nova_linha_dict.get("Entrada na Fábrica"), nova_linha_dict.get("Saída do pátio"))
@@ -254,6 +248,7 @@ elif st.session_state.pagina_atual == "Novo":
             nova_linha_dict['Tempo Espera Doca CD'] = calcular_tempo(nova_linha_dict.get("Entrada CD"), nova_linha_dict.get("Encostou na doca CD"))
             nova_linha_dict['Tempo de Descarregamento CD'] = calcular_tempo(nova_linha_dict.get("Início Descarregamento CD"), nova_linha_dict.get("Fim Descarregamento CD"))
             nova_linha_dict['Tempo Total CD'] = calcular_tempo(nova_linha_dict.get("Entrada CD"), nova_linha_dict.get("Saída CD"))
+            # >>> FIM DA CORREÇÃO DOS CÁLCULOS <<<
 
             nova_linha_lista = [str(nova_linha_dict.get(col, '')) for col in COLUNAS_ESPERADAS]
             
@@ -265,7 +260,6 @@ elif st.session_state.pagina_atual == "Novo":
                     if key.startswith("novo_"): del st.session_state[key]
             except Exception as e:
                 st.session_state.notification = ("error", f"Falha ao salvar: {e}")
-            st.rerun()
 
     st.text_input("🚛 Placa do Caminhão", key="novo_placa")
     st.text_input("👤 Nome do Conferente", key="novo_conferente")
@@ -278,6 +272,13 @@ elif st.session_state.pagina_atual == "Novo":
             st.button(f"Registrar {campo}", key=f"btn_novo_{campo}", on_click=registrar_agora, args=(campo,))
     
     st.markdown("---")
+    
+    if st.session_state.get("notification"):
+        msg_type, msg_text = st.session_state.notification
+        if msg_type == "success": st.success(msg_text)
+        else: st.error(msg_text)
+        del st.session_state.notification
+
     st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
 
 # =============================================================================
@@ -286,13 +287,6 @@ elif st.session_state.pagina_atual == "Novo":
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
     st.markdown("### ✏️ Editar Registros Incompletos")
-
-    if st.session_state.get("notification"):
-        msg_type, msg_text = st.session_state.notification
-        if msg_type == "success": st.success(msg_text)
-        elif msg_type == "warning": st.warning(msg_text)
-        else: st.error(msg_text)
-        del st.session_state.notification
 
     df = carregar_dataframe(worksheet)
     incompletos = df[df["Saída CD"] == ''].copy()
@@ -334,10 +328,10 @@ elif st.session_state.pagina_atual == "Editar":
                 
                 if not houve_mudanca:
                     st.session_state.notification = ("warning", "Nenhuma alteração foi feita.")
-                    st.rerun()
                     return
 
                 reg = df_para_salvar.loc[df_index]
+                # >>> INÍCIO DA CORREÇÃO DOS CÁLCULOS <<<
                 df_para_salvar.loc[df_index, 'Tempo Espera Doca'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
                 df_para_salvar.loc[df_index, 'Tempo de Carregamento'] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
                 df_para_salvar.loc[df_index, 'Tempo Total'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
@@ -345,6 +339,7 @@ elif st.session_state.pagina_atual == "Editar":
                 df_para_salvar.loc[df_index, 'Tempo Espera Doca CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Encostou na doca CD"))
                 df_para_salvar.loc[df_index, 'Tempo de Descarregamento CD'] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
                 df_para_salvar.loc[df_index, 'Tempo Total CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
+                # >>> FIM DA CORREÇÃO DOS CÁLCULOS <<<
 
                 try:
                     gsheet_row_index = df_index + 2
@@ -355,7 +350,6 @@ elif st.session_state.pagina_atual == "Editar":
                     on_selection_change()
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
-                st.rerun()
 
         for campo in campos_tempo:
             valor_original = df.loc[df_index, campo]
@@ -369,6 +363,14 @@ elif st.session_state.pagina_atual == "Editar":
                     st.button("⏰ Agora", key=f"btn_now_{campo}", on_click=registrar_agora_edit, args=(campo,))
         
         st.markdown("---")
+        
+        if st.session_state.get("notification"):
+            msg_type, msg_text = st.session_state.notification
+            if msg_type == "success": st.success(msg_text)
+            elif msg_type == "warning": st.warning(msg_text)
+            else: st.error(msg_text)
+            del st.session_state.notification
+
         st.button("💾 SALVAR ALTERAÇÕES", on_click=salvar_alteracoes, use_container_width=True, type="primary")
 
 # =============================================================================
