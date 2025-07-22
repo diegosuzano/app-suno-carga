@@ -128,9 +128,8 @@ def obter_status(registro):
 def botao_voltar():
     if st.button("⬅️ Voltar ao Menu Principal"):
         st.session_state.pagina_atual = "Tela Inicial"
-        # Limpa o estado da sessão para garantir que não haja lixo
         for key in list(st.session_state.keys()):
-            if key not in ['pagina_atual']: # Preserva apenas o controle da página
+            if key not in ['pagina_atual']:
                 del st.session_state[key]
         st.rerun()
 
@@ -244,10 +243,11 @@ elif st.session_state.pagina_atual == "Novo":
             return
 
         with st.spinner("Salvando no Google Sheets..."):
-            # Adiciona a data atual ao dicionário
             st.session_state.novo_registro_dict['Data'] = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
             
-            # Calcula os tempos
+            for campo in campos_calculados:
+                st.session_state.novo_registro_dict[campo] = "" # Limpa antes de recalcular
+
             st.session_state.novo_registro_dict['Tempo Espera Doca'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada na Fábrica"), st.session_state.novo_registro_dict.get("Encostou na doca Fábrica"))
             st.session_state.novo_registro_dict['Tempo de Carregamento'] = calcular_tempo(st.session_state.novo_registro_dict.get("Início carregamento"), st.session_state.novo_registro_dict.get("Fim carregamento"))
             st.session_state.novo_registro_dict['Tempo Total'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada na Fábrica"), st.session_state.novo_registro_dict.get("Saída do pátio"))
@@ -256,25 +256,22 @@ elif st.session_state.pagina_atual == "Novo":
             st.session_state.novo_registro_dict['Tempo de Descarregamento CD'] = calcular_tempo(st.session_state.novo_registro_dict.get("Início Descarregamento CD"), st.session_state.novo_registro_dict.get("Fim Descarregamento CD"))
             st.session_state.novo_registro_dict['Tempo Total CD'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada CD"), st.session_state.novo_registro_dict.get("Saída CD"))
 
-            # Prepara a lista na ordem correta das colunas
-            nova_linha_lista = [str(st.session_state.novo_registro_dict.get(col, '')) for col in COLUNAS_ESPERADAS]
+            nova_linha_lista = [st.session_state.novo_registro_dict.get(col) if st.session_state.novo_registro_dict.get(col, '') != '' else None for col in COLUNAS_ESPERADAS]
             
             try:
                 worksheet.append_row(nova_linha_lista, value_input_option='USER_ENTERED')
                 st.cache_data.clear()
                 st.session_state.notification = ("success", "Novo registro salvo com sucesso!")
-                del st.session_state.novo_registro_dict # Limpa o dicionário para o próximo registro
+                del st.session_state.novo_registro_dict
             except Exception as e:
                 st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
-    # Widgets para placa e conferente
     placa = st.text_input("🚛 Placa do Caminhão", value=st.session_state.novo_registro_dict.get("Placa do caminhão", ""), key="placa_novo")
     conferente = st.text_input("👤 Nome do Conferente", value=st.session_state.novo_registro_dict.get("Nome do conferente", ""), key="conferente_novo")
     st.session_state.novo_registro_dict["Placa do caminhão"] = placa
     st.session_state.novo_registro_dict["Nome do conferente"] = conferente
     st.markdown("---")
 
-    # Widgets para os campos de tempo
     for campo in campos_tempo:
         if st.session_state.novo_registro_dict.get(campo):
             st.success(f"✅ {campo}: {st.session_state.novo_registro_dict[campo]}")
@@ -283,7 +280,6 @@ elif st.session_state.pagina_atual == "Novo":
     
     st.markdown("---")
     
-    # Botão de salvar e notificação
     col_btn, col_msg = st.columns([1, 2])
     with col_btn:
         st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
@@ -295,7 +291,7 @@ elif st.session_state.pagina_atual == "Novo":
             del st.session_state.notification
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (LÓGICA REESCRITA)
+# PÁGINA DE EDIÇÃO
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -310,13 +306,10 @@ elif st.session_state.pagina_atual == "Editar":
     opcoes = {f"🚛 {row['Placa do caminhão']} | 📅 {row['Data']}": idx for idx, row in incompletos.iterrows()}
     
     def carregar_registro_para_edicao():
-        # Pega o valor selecionado no selectbox
         selecao_atual = st.session_state.selectbox_edicao
         if selecao_atual != "Selecione...":
-            # Encontra o índice real do dataframe
             df_index_filtrado = opcoes[selecao_atual]
             df_index_real = incompletos.loc[df_index_filtrado, 'df_index']
-            # Carrega a linha inteira como um dicionário para a memória
             st.session_state.registro_em_edicao = df.loc[df_index_real].to_dict()
         else:
             if 'registro_em_edicao' in st.session_state:
@@ -329,21 +322,20 @@ elif st.session_state.pagina_atual == "Editar":
         on_change=carregar_registro_para_edicao
     )
 
-    # Só continua se um registro válido estiver carregado na memória
     if 'registro_em_edicao' in st.session_state:
         reg = st.session_state.registro_em_edicao
         st.markdown(f"#### Editando Placa: **{reg['Placa do caminhão']}**")
 
         def registrar_agora_edit(campo_a_registrar):
-            # Modifica diretamente o dicionário na memória
             st.session_state.registro_em_edicao[campo_a_registrar] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
 
         def salvar_alteracoes():
             with st.spinner("Salvando no Google Sheets..."):
-                # Pega o registro já atualizado da memória
                 registro_para_salvar = st.session_state.registro_em_edicao
                 
-                # Recalcula todos os tempos com base nos dados mais recentes
+                for campo in campos_calculados:
+                    registro_para_salvar[campo] = "" # Limpa antes de recalcular
+
                 registro_para_salvar['Tempo Espera Doca'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Encostou na doca Fábrica"))
                 registro_para_salvar['Tempo de Carregamento'] = calcular_tempo(registro_para_salvar.get("Início carregamento"), registro_para_salvar.get("Fim carregamento"))
                 registro_para_salvar['Tempo Total'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Saída do pátio"))
@@ -354,17 +346,19 @@ elif st.session_state.pagina_atual == "Editar":
 
                 try:
                     gsheet_row_index = reg['df_index'] + 2
-                    valores_para_salvar = [str(registro_para_salvar.get(col, '')) for col in COLUNAS_ESPERADAS]
+                    # >>> INÍCIO DA CORREÇÃO FINAL <<<
+                    # Converte strings vazias para None para limpar a célula no Google Sheets
+                    valores_para_salvar = [registro_para_salvar.get(col) if registro_para_salvar.get(col, '') != '' else None for col in COLUNAS_ESPERADAS]
+                    # >>> FIM DA CORREÇÃO FINAL <<<
+                    
                     worksheet.update(f'A{gsheet_row_index}', [valores_para_salvar], value_input_option='USER_ENTERED')
                     st.cache_data.clear()
                     st.session_state.notification = ("success", "Registro atualizado com sucesso!")
-                    # Limpa o registro da memória para forçar a recarga
                     del st.session_state.registro_em_edicao
                     st.session_state.selectbox_edicao = "Selecione..."
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
-        # Loop para desenhar os widgets na tela
         for campo in campos_tempo:
             valor_a_exibir = reg.get(campo, '')
 
