@@ -33,18 +33,7 @@ eventos_cd = [
 
 campos_tempo = eventos_fabrica + eventos_cd
 
-# CÁLCULOS DEVEM ESTAR NA ORDEM EXATA DA PLANILHA
-campos_calculados_ordem = [
-    "Tempo de Carregamento",      # após Fim carregamento
-    "Tempo Espera Doca",          # após Saída do pátio
-    "Tempo Total",
-    "Tempo Percurso Para CD",     # após Saída CD
-    "Tempo Espera Doca CD",
-    "Tempo de Descarregamento CD",
-    "Tempo Total CD"
-]
-
-# ORDEM FINAL DAS COLUNAS (IGUAL À PLANILHA)
+# ORDEM EXATA DAS COLUNAS (IGUAL À PLANILHA)
 COLUNAS_ESPERADAS = (
     ["Data", "Placa do caminhão", "Nome do conferente"] +
     eventos_fabrica +
@@ -53,13 +42,13 @@ COLUNAS_ESPERADAS = (
     ["Tempo de Descarregamento CD", "Tempo Espera Doca CD", "Tempo Total CD", "Tempo Percurso Para CD"]
 )
 
-# --- INICIALIZAÇÃO DO ESTADO DA SESSÃO ---
+# --- INICIALIZAÇÃO DO ESTADO ---
 if 'pagina_atual' not in st.session_state:
     st.session_state.pagina_atual = "Tela Inicial"
 if 'modo_escuro' not in st.session_state:
     st.session_state.modo_escuro = False
 
-# --- CSS PERSONALIZADO ---
+# --- ESTILO (modo escuro) ---
 def aplicar_estilo():
     cor_fundo = "#1e1e1e" if st.session_state.modo_escuro else "#f8fafc"
     cor_texto = "white" if st.session_state.modo_escuro else "#1f4e79"
@@ -101,7 +90,7 @@ def aplicar_estilo():
 
 aplicar_estilo()
 
-# --- BOTÃO DE MODO ESCURO ---
+# --- BOTÃO MODO ESCURO ---
 col1, col2 = st.columns([4, 1])
 with col2:
     if st.button("🌙" if st.session_state.modo_escuro else "🌞", key="btn_modo"):
@@ -162,15 +151,36 @@ def calcular_tempo(inicio, fim):
 
 def calcular_tempos(reg):
     # Fábrica
-    reg["Tempo Espera Doca"] = calcular_tempo(reg["Entrada na Fábrica"], reg["Encostou na doca Fábrica"])
-    reg["Tempo de Carregamento"] = calcular_tempo(reg["Início carregamento"], reg["Fim carregamento"])
-    reg["Tempo Total"] = calcular_tempo(reg["Entrada na Fábrica"], reg["Saída do pátio"])
+    reg["Tempo Espera Doca"] = calcular_tempo(
+        reg.get("Entrada na Fábrica", ""), 
+        reg.get("Encostou na doca Fábrica", "")
+    )
+    reg["Tempo de Carregamento"] = calcular_tempo(
+        reg.get("Início carregamento", ""), 
+        reg.get("Fim carregamento", "")
+    )
+    reg["Tempo Total"] = calcular_tempo(
+        reg.get("Entrada na Fábrica", ""), 
+        reg.get("Saída do pátio", "")
+    )
     # Rota
-    reg["Tempo Percurso Para CD"] = calcular_tempo(reg["Saída do pátio"], reg["Entrada CD"])
+    reg["Tempo Percurso Para CD"] = calcular_tempo(
+        reg.get("Saída do pátio", ""), 
+        reg.get("Entrada CD", "")
+    )
     # CD
-    reg["Tempo Espera Doca CD"] = calcular_tempo(reg["Entrada CD"], reg["Encostou na doca CD"])
-    reg["Tempo de Descarregamento CD"] = calcular_tempo(reg["Início Descarregamento CD"], reg["Fim Descarregamento CD"])
-    reg["Tempo Total CD"] = calcular_tempo(reg["Entrada CD"], reg["Saída CD"])
+    reg["Tempo Espera Doca CD"] = calcular_tempo(
+        reg.get("Entrada CD", ""), 
+        reg.get("Encostou na doca CD", "")
+    )
+    reg["Tempo de Descarregamento CD"] = calcular_tempo(
+        reg.get("Início Descarregamento CD", ""), 
+        reg.get("Fim Descarregamento CD", "")
+    )
+    reg["Tempo Total CD"] = calcular_tempo(
+        reg.get("Entrada CD", ""), 
+        reg.get("Saída CD", "")
+    )
 
 def obter_status(registro):
     for campo in reversed(campos_tempo):
@@ -226,7 +236,10 @@ elif st.session_state.pagina_atual == "Novo":
     botao_voltar()
     st.markdown("### 🆕 NOVO REGISTRO")
     if 'novo_registro' not in st.session_state:
-        st.session_state.novo_registro = {"Data": datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")}
+        # Inicializa todos os campos
+        st.session_state.novo_registro = {col: "" for col in COLUNAS_ESPERADAS}
+        st.session_state.novo_registro["Data"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
+
     reg = st.session_state.novo_registro
     reg["Placa do caminhão"] = st.text_input("🚛 Placa", reg.get("Placa do caminhão", ""))
     reg["Nome do conferente"] = st.text_input("👤 Conferente", reg.get("Nome do conferente", ""))
@@ -235,7 +248,13 @@ elif st.session_state.pagina_atual == "Novo":
 
     for i, campo in enumerate(campos_tempo):
         valor_atual = str(reg.get(campo, "")).strip()
-        anterior_ok = (i == 0) or (i > 0 and str(reg.get(campos_tempo[i-1], "")).strip() and reg.get(campos_tempo[i-1]) not in ["00:00", "00", "0"])
+
+        # Verifica se o anterior foi preenchido com valor válido
+        anterior_ok = (i == 0) or (
+            i > 0 and 
+            str(reg.get(campos_tempo[i-1], "")).strip() and 
+            reg.get(campos_tempo[i-1]) not in ["00:00", "00", "0"]
+        )
 
         if valor_atual and valor_atual not in ["00:00", "00", "0"]:
             st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor_atual}`</span>", unsafe_allow_html=True)
@@ -254,7 +273,7 @@ elif st.session_state.pagina_atual == "Novo":
             st.markdown(f"<span class='etapa-bloqueada'>🔴 {campo} (aguarde etapa anterior)</span>", unsafe_allow_html=True)
 
 # =============================================================================
-# EDITAR REGISTRO (CORRIGIDO)
+# EDITAR REGISTRO
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
