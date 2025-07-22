@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone, timedelta
-import numpy as np
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -182,11 +181,13 @@ if st.session_state.pagina_atual == "Tela Inicial":
             st.info("Nenhum registro hoje para calcular as médias.")
         else:
             def hhmm_para_minutos(t):
-                return int(t.split(":")[0]) * 60 + int(t.split(":")[1]) if isinstance(t, str) and ":" in t else np.nan
+                return int(t.split(":")[0]) * 60 + int(t.split(":")[1]) if isinstance(t, str) and ":" in t else float('nan')
 
             def calcular_media_tempo(s):
                 m = s.apply(hhmm_para_minutos).mean()
-                return f"{int(m // 60):02d}:{int(m % 60):02d}" if not pd.isna(m) else "N/D"
+                if pd.isna(m):
+                    return "N/D"
+                return f"{int(m // 60):02d}:{int(m % 60):02d}"
 
             c1, c2 = st.columns(2)
             with c1:
@@ -258,7 +259,7 @@ elif st.session_state.pagina_atual == "Novo":
 
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (VERSÃO QUE FUNCIONA DE VERDADE)
+# PÁGINA DE EDIÇÃO (VERSÃO QUE FUNCIONA DE VERDADE - SEM on_click)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -285,7 +286,7 @@ elif st.session_state.pagina_atual == "Editar":
     if selecao != "Selecione..." and selecao in opcoes:
         df_idx = opcoes[selecao]
 
-        # Carrega o registro apenas se for novo ou mudou
+        # Carrega o registro se for novo ou mudou
         if "registro_em_edicao" not in st.session_state or st.session_state.get("df_idx_atual") != df_idx:
             st.session_state.registro_em_edicao = df.loc[df_idx].to_dict()
             st.session_state.df_idx_atual = df_idx
@@ -294,13 +295,10 @@ elif st.session_state.pagina_atual == "Editar":
         st.markdown(f"#### Placa: `{reg['Placa do caminhão']}` | Conferente: {reg['Nome do conferente']}")
         st.markdown("---")
 
-        # Vai armazenar se algum campo foi alterado
         houve_alteracao = False
 
-        # Exibe cada campo
         for campo in campos_tempo:
             valor_atual = reg.get(campo, "").strip()
-
             col1, col2 = st.columns([4, 1])
             with col1:
                 if valor_atual:
@@ -310,12 +308,12 @@ elif st.session_state.pagina_atual == "Editar":
 
             with col2:
                 if not valor_atual:
-                    if st.button("⏰", key=f"btn_edit_{campo}", help=f"Registrar horário atual para '{campo}'"):
-                        # Armazena temporariamente qual campo quer registrar
-                        st.session_state.campo_para_registrar = campo
-                        st.warning(f"Você deseja registrar o horário atual para **'{campo}'**?")
-                        # Botão de confirmação explícita
-                        if st.button(f"✅ Sim, registrar '{campo}'", key=f"conf_{campo}"):
+                    if st.button("⏰", key=f"btn_edit_{campo}"):
+                        # Armazena qual campo deve ser confirmado
+                        st.session_state.campo_a_confirmar = campo
+                        st.warning(f"Registrar horário atual para '{campo}'?")
+                        # Botão de confirmação que aparece logo abaixo
+                        if st.button(f"✅ Sim, registrar '{campo}'", key=f"confirm_{campo}"):
                             hora_atual = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
                             reg[campo] = hora_atual
                             st.session_state.registro_em_edicao = reg
@@ -323,7 +321,7 @@ elif st.session_state.pagina_atual == "Editar":
                             st.success(f"✅ Registrado: **{campo}** → {hora_atual}")
                             st.rerun()
 
-        # Se houve alteração, recalcular tempos
+        # Recalcula tempos se houve alteração
         if houve_alteracao:
             reg["Tempo Espera Doca"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
             reg["Tempo de Carregamento"] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
@@ -336,7 +334,6 @@ elif st.session_state.pagina_atual == "Editar":
 
         st.markdown("---")
 
-        # Botão para salvar tudo
         if st.button("💾 SALVAR ALTERAÇÕES NO REGISTRO", type="primary", use_container_width=True):
             try:
                 row_idx = reg["df_index"] + 2
@@ -345,7 +342,6 @@ elif st.session_state.pagina_atual == "Editar":
                 st.cache_data.clear()
                 st.success("✅ Registro salvo com sucesso!")
                 
-                # Limpar estado
                 del st.session_state.registro_em_edicao
                 del st.session_state.df_idx_atual
                 st.session_state.select_registro_edicao = "Selecione..."
