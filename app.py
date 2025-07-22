@@ -123,7 +123,6 @@ def obter_status(registro):
 def botao_voltar():
     if st.button("⬅️ Voltar ao Menu Principal"):
         st.session_state.pagina_atual = "Tela Inicial"
-        # Limpa apenas estados específicos
         keys_to_keep = ["pagina_atual"]
         for key in list(st.session_state.keys()):
             if key not in keys_to_keep:
@@ -234,10 +233,7 @@ elif st.session_state.pagina_atual == "Novo":
             st.error("⚠️ Placa e Nome do Conferente são obrigatórios!")
         else:
             with st.spinner("Salvando novo registro..."):
-                # Preenche a data automaticamente
                 reg["Data"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
-
-                # Recalcula todos os tempos
                 reg["Tempo Espera Doca"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
                 reg["Tempo de Carregamento"] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
                 reg["Tempo Total"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
@@ -263,7 +259,7 @@ elif st.session_state.pagina_atual == "Novo":
 
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (REFATORADA DO ZERO - SEM BUGS)
+# PÁGINA DE EDIÇÃO (VERSÃO SUPER SEGURA COM CONFIRMAÇÃO EXPLÍCITA)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -276,7 +272,6 @@ elif st.session_state.pagina_atual == "Editar":
         st.success("🎉 Todos os registros estão completos!")
         st.stop()
 
-    # Criar opções para seleção
     opcoes = {
         f"🚛 {row['Placa do caminhão']} | 📅 {row['Data']} | Último: {obter_status(row)}": idx 
         for idx, row in incompletos.iterrows()
@@ -291,20 +286,20 @@ elif st.session_state.pagina_atual == "Editar":
     if selecao != "Selecione..." and selecao in opcoes:
         df_idx = opcoes[selecao]
 
-        # Carregar o registro se for novo ou mudou
+        # Carrega o registro se for novo ou mudou
         if "registro_em_edicao" not in st.session_state or st.session_state.get("df_idx_atual") != df_idx:
             st.session_state.registro_em_edicao = df.loc[df_idx].to_dict()
-            st.session_state.df_idx_atual = df_idx  # Rastrear qual registro está sendo editado
+            st.session_state.df_idx_atual = df_idx
 
         reg = st.session_state.registro_em_edicao
 
         st.markdown(f"#### Placa: `{reg['Placa do caminhão']}` | Conferente: {reg['Nome do conferente']}")
         st.markdown("---")
 
-        # Flag para saber se houve mudança
-        campo_atualizado = False
+        # Vai armazenar se algum campo foi alterado
+        houve_alteracao = False
 
-        # Exibir cada campo com botão para registrar hora atual
+        # Exibe cada campo
         for campo in campos_tempo:
             valor_atual = reg.get(campo, "").strip()
 
@@ -317,14 +312,18 @@ elif st.session_state.pagina_atual == "Editar":
 
             with col2:
                 if not valor_atual:
-                    if st.button("⏰", key=f"btn_edit_{campo}", use_container_width=True):
-                        # Registra o horário atual no campo
-                        reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
-                        st.session_state.registro_em_edicao = reg
-                        campo_atualizado = True
+                    if st.button("⏰", key=f"btn_edit_{campo}", help=f"Registrar agora: {campo}"):
+                        # Confirmação clara
+                        st.warning(f"Você está prestes a registrar **agora** como horário de '{campo}'. Confirmar?")
+                        if st.button("✅ Sim, registrar agora", key=f"confirm_{campo}"):
+                            reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+                            st.session_state.registro_em_edicao = reg
+                            houve_alteracao = True
+                            st.success(f"Registrado: {campo} → {reg[campo]}")
+                            st.rerun()
 
-        # Se algum campo foi atualizado, recalcula os tempos derivados
-        if campo_atualizado:
+        # Se houve alteração, recalcular tempos
+        if houve_alteracao:
             reg["Tempo Espera Doca"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
             reg["Tempo de Carregamento"] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
             reg["Tempo Total"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
@@ -333,28 +332,25 @@ elif st.session_state.pagina_atual == "Editar":
             reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
             reg["Tempo Total CD"] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
             st.session_state.registro_em_edicao = reg
-            st.rerun()  # Força atualização visual após mudança
 
         st.markdown("---")
 
-        # Botão para salvar todas as alterações
+        # Botão para salvar tudo
         if st.button("💾 SALVAR ALTERAÇÕES NO REGISTRO", type="primary", use_container_width=True):
             try:
-                row_idx = reg["df_index"] + 2  # Linha real na planilha (índice + 2)
+                row_idx = reg["df_index"] + 2
                 valores = [reg.get(col, "") or None for col in COLUNAS_ESPERADAS]
                 worksheet.update(f"A{row_idx}", [valores], value_input_option='USER_ENTERED')
                 st.cache_data.clear()
                 st.success("✅ Registro salvo com sucesso!")
                 
                 # Limpar estado
-                if "registro_em_edicao" in st.session_state:
-                    del st.session_state.registro_em_edicao
-                if "df_idx_atual" in st.session_state:
-                    del st.session_state.df_idx_atual
+                del st.session_state.registro_em_edicao
+                del st.session_state.df_idx_atual
                 st.session_state.select_registro_edicao = "Selecione..."
                 st.rerun()
             except Exception as e:
-                st.error(f"❌ Erro ao salvar: {e}")
+                st.error(f"❌ Falha ao salvar: {e}")
 
 
 # =============================================================================
