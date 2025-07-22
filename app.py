@@ -16,7 +16,7 @@ campos_tempo = [
     "Fim Descarregamento CD", "Saída CD"
 ]
 campos_calculados = [
-    "Tempo Espera Doca", "Tempo de Carregamento", "Tempo Total",
+    "Tempo Espera Doca", "Tempo de Carregamento", "Tempo Total", 
     "Tempo Percurso Para CD", "Tempo Espera Doca CD", "Tempo de Descarregamento CD", "Tempo Total CD"
 ]
 COLUNAS_ESPERADAS = ["Data", "Placa do caminhão", "Nome do conferente"] + campos_tempo + campos_calculados
@@ -29,7 +29,7 @@ if 'rerun_needed' not in st.session_state:
 
 # --- CONFIGURAÇÃO DA PÁGINA E CSS ---
 st.set_page_config(
-    page_title="Suzano - Controle de Carga",
+    page_title="Suzano - Controle de Carga", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -62,14 +62,14 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
 </style>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True) 
 
 # --- FUNÇÕES DE CONEXÃO E DADOS ---
 @st.cache_resource(show_spinner="Conectando ao Google Sheets...")
 def connect_to_google_sheets():
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes )
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
         client = gspread.authorize(creds)
         spreadsheet = client.open(NOME_PLANILHA)
         return spreadsheet.sheet1
@@ -119,13 +119,13 @@ def botao_voltar():
         st.rerun()
 
 worksheet = connect_to_google_sheets()
-st.markdown("<div class='main-header'>🚚 Suzano - Controle de Transferência de Carga</div>", unsafe_allow_html=True)
+st.markdown("<div class=\'main-header\'>🚚 Suzano - Controle de Transferência de Carga</div>", unsafe_allow_html=True)
 
 # =============================================================================
 # TELA INICIAL
 # =============================================================================
 if st.session_state.pagina_atual == "Tela Inicial":
-    st.markdown("<div class='section-header'>MENU DE AÇÕES</div>", unsafe_allow_html=True)
+    st.markdown("<div class=\'section-header\'>MENU DE AÇÕES</div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     if col1.button("🆕 NOVO REGISTRO", use_container_width=True):
         st.session_state.pagina_atual = "Novo"; st.rerun()
@@ -137,7 +137,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
         st.session_state.pagina_atual = "Finalizadas"; st.rerun()
 
     df = carregar_dataframe(worksheet)
-    st.markdown("<div class='section-header'>SITUAÇÃO ATUAL</div>", unsafe_allow_html=True)
+    st.markdown("<div class=\'section-header\'>SITUAÇÃO ATUAL</div>", unsafe_allow_html=True)
     if not df.empty:
         em_operacao_df = df[df["Saída CD"] == ''].copy()
         m1, m2, m3 = st.columns(3)
@@ -150,7 +150,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
                 for _, row in em_operacao_df.iterrows():
                     st.info(f"**Placa:** {row['Placa do caminhão']} | **Status Atual:** {obter_status(row)}")
 
-    st.markdown("<div class='section-header'>📈 INDICADORES DE PERFORMANCE (HOJE)</div>", unsafe_allow_html=True)
+    st.markdown("<div class=\'section-header\'>📈 INDICADORES DE PERFORMANCE (HOJE)</div>", unsafe_allow_html=True)
     if not df.empty:
         hoje_str = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
         df_hoje = df[pd.to_datetime(df['Data'], errors='coerce').dt.strftime('%Y-%m-%d') == hoje_str].copy()
@@ -179,7 +179,9 @@ elif st.session_state.pagina_atual == "Novo":
     st.markdown("### 🆕 Novo Registro de Transferência")
     if 'novo_registro_dict' not in st.session_state: st.session_state.novo_registro_dict = {}
     
-    def registrar_agora_novo(campo): st.session_state.novo_registro_dict[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+    def registrar_agora_novo(campo):
+        st.session_state.novo_registro_dict[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+
     def salvar_novo_registro():
         if not all(st.session_state.novo_registro_dict.get(k) for k in ["Placa do caminhão", "Nome do conferente"]):
             st.session_state.notification = ("error", "Placa e Conferente são obrigatórios.")
@@ -187,31 +189,47 @@ elif st.session_state.pagina_atual == "Novo":
         with st.spinner("Salvando..."):
             reg = st.session_state.novo_registro_dict
             reg['Data'] = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
-            # ... (cálculos de tempo) ...
+            
+            # Recalcula todos os tempos antes de salvar
+            reg['Tempo Espera Doca'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
+            reg['Tempo de Carregamento'] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
+            reg['Tempo Total'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
+            reg['Tempo Percurso Para CD'] = calcular_tempo(reg.get("Saída do pátio"), reg.get("Entrada CD"))
+            reg['Tempo Espera Doca CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Encostou na doca CD"))
+            reg['Tempo de Descarregamento CD'] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
+            reg['Tempo Total CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
+
             try:
-                worksheet.append_row([reg.get(col, '') for col in COLUNAS_ESPERADAS], value_input_option='USER_ENTERED')
+                worksheet.append_row([reg.get(col, '') if reg.get(col, '') != '' else None for col in COLUNAS_ESPERADAS], value_input_option='USER_ENTERED')
                 st.cache_data.clear()
-                st.session_state.notification = ("success", "Registro salvo!")
+                st.session_state.notification = ("success", "Novo registro salvo!")
                 del st.session_state.novo_registro_dict
             except Exception as e: st.session_state.notification = ("error", f"Falha: {e}")
 
     reg = st.session_state.novo_registro_dict
-    reg["Placa do caminhão"] = st.text_input("🚛 Placa", reg.get("Placa do caminhão", ""))
-    reg["Nome do conferente"] = st.text_input("👤 Conferente", reg.get("Nome do conferente", ""))
+    reg["Placa do caminhão"] = st.text_input("🚛 Placa", reg.get("Placa do caminhão", ""), key="placa_novo")
+    reg["Nome do conferente"] = st.text_input("👤 Conferente", reg.get("Nome do conferente", ""), key="conferente_novo")
     st.markdown("---")
     for campo in campos_tempo:
-        if reg.get(campo): st.success(f"✅ {campo}: {reg[campo]}")
-        else: st.button(f"Registrar {campo}", key=f"btn_novo_{campo}", on_click=registrar_agora_novo, args=(campo,))
+        if reg.get(campo):
+            st.success(f"✅ {campo}: {reg[campo]}")
+        else:
+            st.button(f"Registrar {campo}", key=f"btn_novo_{campo}", on_click=registrar_agora_novo, args=(campo,))
+    
     st.markdown("---")
-    if st.button("💾 SALVAR NOVO REGISTRO", use_container_width=True, type="primary"): salvar_novo_registro()
-    if st.session_state.get("notification"):
-        msg_type, msg_text = st.session_state.notification
-        if msg_type == "success": st.success(msg_text)
-        else: st.error(msg_text)
-        del st.session_state.notification
+    
+    col_btn, col_msg = st.columns([1, 2])
+    with col_btn:
+        st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
+    with col_msg:
+        if st.session_state.get("notification"):
+            msg_type, msg_text = st.session_state.notification
+            if msg_type == "success": st.success(msg_text)
+            else: st.error(msg_text)
+            del st.session_state.notification
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (TOTALMENTE REFEITA)
+# PÁGINA DE EDIÇÃO (CORRIGIDA)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -240,11 +258,13 @@ elif st.session_state.pagina_atual == "Editar":
 
         def registrar_agora_edit(campo):
             st.session_state.registro_em_edicao[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
-            st.session_state.rerun_needed = True
+            st.session_state.rerun_needed = True # Sinaliza que um rerun é necessário
 
         def salvar_alteracoes():
             with st.spinner("Salvando alterações..."):
                 r = st.session_state.registro_em_edicao
+                
+                # Recalcula todos os tempos antes de salvar
                 r['Tempo Espera Doca'] = calcular_tempo(r.get("Entrada na Fábrica"), r.get("Encostou na doca Fábrica"))
                 r['Tempo de Carregamento'] = calcular_tempo(r.get("Início carregamento"), r.get("Fim carregamento"))
                 r['Tempo Total'] = calcular_tempo(r.get("Entrada na Fábrica"), r.get("Saída do pátio"))
@@ -255,12 +275,13 @@ elif st.session_state.pagina_atual == "Editar":
                 
                 try:
                     row_idx = r['df_index'] + 2
-                    valores = [r.get(col, '') for col in COLUNAS_ESPERADAS]
+                    valores = [r.get(col, '') if r.get(col, '') != '' else None for col in COLUNAS_ESPERADAS]
                     worksheet.update(f'A{row_idx}', [valores], value_input_option='USER_ENTERED')
                     st.cache_data.clear()
                     st.session_state.notification = ("success", "Registro atualizado com sucesso!")
                     del st.session_state.registro_em_edicao
-                    st.session_state.rerun_needed = True
+                    st.session_state.selectbox_edicao = "Selecione..."
+                    st.session_state.rerun_needed = True # Sinaliza que um rerun é necessário
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
@@ -274,8 +295,8 @@ elif st.session_state.pagina_atual == "Editar":
                 col2.button("⏰ Agora", key=f"btn_edit_{campo}", on_click=registrar_agora_edit, args=(campo,), use_container_width=True)
         
         st.markdown("---")
-        if st.button("💾 SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
-            salvar_alteracoes()
+        if st.button("💾 SALVAR ALTERAÇÕES", use_container_width=True, type="primary", on_click=salvar_alteracoes):
+            pass # A função on_click já cuida do salvamento e do rerun_needed
 
     if st.session_state.get("notification"):
         msg_type, msg_text = st.session_state.notification
@@ -283,6 +304,7 @@ elif st.session_state.pagina_atual == "Editar":
         else: st.error(msg_text)
         del st.session_state.notification
 
+    # Executa o rerun se necessário, fora do callback
     if st.session_state.rerun_needed:
         st.session_state.rerun_needed = False
         st.rerun()
@@ -293,7 +315,13 @@ elif st.session_state.pagina_atual == "Editar":
 elif st.session_state.pagina_atual in ["Em Operação", "Finalizadas"]:
     botao_voltar()
     df = carregar_dataframe(worksheet)
-    titulo = "📊 Registros em Operação" if st.session_state.pagina_atual == "Em Operação" else "✅ Registros Finalizados"
-    st.markdown(f"### {titulo}")
-    subset_df = df[df["Saída CD"] == ''] if st.session_state.pagina_atual == "Em Operação" else df[df["Saída CD"] != '']
-    st.dataframe(subset_df)
+    
+    if st.session_state.pagina_atual == "Em Operação":
+        st.markdown("### 📊 Registros em Operação")
+        subset_df = df[df["Saída CD"] == ''].copy()
+        st.dataframe(subset_df) 
+            
+    elif st.session_state.pagina_atual == "Finalizadas":
+        st.markdown("### ✅ Registros Finalizados")
+        subset_df = df[df["Saída CD"] != ''].copy()
+        st.dataframe(subset_df)
