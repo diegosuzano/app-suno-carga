@@ -231,7 +231,7 @@ elif st.session_state.pagina_atual == "Novo":
             del st.session_state.notification
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (LÓGICA SIMPLIFICADA E CORRIGIDA)
+# PÁGINA DE EDIÇÃO (LÓGICA CORRIGIDA)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -242,23 +242,27 @@ elif st.session_state.pagina_atual == "Editar":
     if incompletos.empty:
         st.success("🎉 Todos os registros estão completos!"); st.stop()
 
-    # Usa o índice real do DataFrame como valor na opção para evitar duplicatas
-    opcoes = {f"🚛 {row['Placa do caminhão']} | 📅 {pd.to_datetime(row['Data']).strftime('%Y-%m-%d')}": row['df_index'] for _, row in incompletos.iterrows()}
+    # CRIA UM DICIONÁRIO DE OPÇÕES: O TEXTO PARA MOSTRAR E O ÍNDICE REAL COMO VALOR
+    opcoes = {
+        f"🚛 {row['Placa do caminhão']} | 📅 {pd.to_datetime(row['Data']).strftime('%Y-%m-%d')}": row.name
+        for _, row in incompletos.iterrows()
+    }
     
     def carregar_registro_para_edicao():
-        selecao_idx = st.session_state.selectbox_edicao
-        if selecao_idx != "Selecione...":
-            # O valor da opção agora é o índice real do DataFrame
-            df_index_real = selecao_idx
+        # PEGA O TEXTO SELECIONADO
+        selecao_texto = st.session_state.selectbox_edicao
+        if selecao_texto != "Selecione...":
+            # USA O TEXTO PARA ENCONTRAR O ÍNDICE REAL NO DICIONÁRIO
+            df_index_real = opcoes[selecao_texto]
+            # CARREGA O REGISTRO USANDO O ÍNDICE REAL
             st.session_state.registro_em_edicao = df.loc[df_index_real].to_dict()
         elif "registro_em_edicao" in st.session_state:
             del st.session_state.registro_em_edicao
 
-    # Passa o índice real como valor da opção
-    selecao_label = st.selectbox(
+    # O SELECTBOX MOSTRA AS CHAVES DO DICIONÁRIO (OS TEXTOS AMIGÁVEIS)
+    st.selectbox(
         "Selecione um registro:", 
         options=["Selecione..."] + list(opcoes.keys()), 
-        format_func=lambda x: x if isinstance(x, str) else opcoes.get(x, "Selecione..."),
         key="selectbox_edicao",
         on_change=carregar_registro_para_edicao
     )
@@ -293,7 +297,6 @@ elif st.session_state.pagina_atual == "Editar":
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
-        # Lógica de exibição dos campos de tempo na edição, igual ao novo registro
         for campo in campos_tempo:
             valor_atual = reg.get(campo, "")
             if valor_atual and str(valor_atual).strip():
@@ -327,4 +330,4 @@ elif st.session_state.pagina_atual in ["Em Operação", "Finalizadas"]:
     elif st.session_state.pagina_atual == "Finalizadas":
         st.markdown("### ✅ Registros Finalizados")
         subset_df = df[df["Saída CD"] != ""].copy()
-        st.dataframe(subset_df)
+        st.dataframe(subset_df)```
