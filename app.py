@@ -87,8 +87,8 @@ def carregar_dataframe(_worksheet):
         for col in COLUNAS_ESPERADAS:
             if col not in df.columns: df[col] = ''
         df = df[COLUNAS_ESPERADAS]
-        df['df_index'] = df.index
-        return df.fillna('')
+        df["df_index"] = df.index # Adiciona o índice original do DataFrame
+        return df.fillna("")
     except Exception as e:
         st.error(f"Erro ao ler dados da planilha: {e}")
         return pd.DataFrame(columns=COLUNAS_ESPERADAS)
@@ -97,7 +97,9 @@ def carregar_dataframe(_worksheet):
 def calcular_tempo(inicio, fim):
     if not all([inicio, fim]) or not all(str(v).strip() for v in [inicio, fim]): return ""
     try:
-        inicio_dt, fim_dt = pd.to_datetime(inicio, errors='coerce'), pd.to_datetime(fim, errors='coerce')
+        inicio_dt, fim_dt = pd.to_datetime(inicio, errors=\'coerce\
+'), pd.to_datetime(fim, errors=\'coerce\
+')
         if pd.isna(inicio_dt) or pd.isna(fim_dt): return ""
         diff = fim_dt - inicio_dt
         if diff.total_seconds() < 0: return "Inválido"
@@ -115,17 +117,19 @@ def botao_voltar():
     if st.button("⬅️ Voltar ao Menu Principal"):
         st.session_state.pagina_atual = "Tela Inicial"
         for key in list(st.session_state.keys()):
-            if key not in ['pagina_atual']: del st.session_state[key]
+            if key not in ["pagina_atual"]: del st.session_state[key]
         st.rerun()
 
 worksheet = connect_to_google_sheets()
-st.markdown("<div class=\'main-header\'>🚚 Suzano - Controle de Transferência de Carga</div>", unsafe_allow_html=True)
+st.markdown("<div class=\'main-header\
+'>🚚 Suzano - Controle de Transferência de Carga</div>", unsafe_allow_html=True)
 
 # =============================================================================
 # TELA INICIAL
 # =============================================================================
 if st.session_state.pagina_atual == "Tela Inicial":
-    st.markdown("<div class=\'section-header\'>MENU DE AÇÕES</div>", unsafe_allow_html=True)
+    st.markdown("<div class=\'section-header\
+'>MENU DE AÇÕES</div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     if col1.button("🆕 NOVO REGISTRO", use_container_width=True):
         st.session_state.pagina_atual = "Novo"; st.rerun()
@@ -137,26 +141,29 @@ if st.session_state.pagina_atual == "Tela Inicial":
         st.session_state.pagina_atual = "Finalizadas"; st.rerun()
 
     df = carregar_dataframe(worksheet)
-    st.markdown("<div class=\'section-header\'>SITUAÇÃO ATUAL</div>", unsafe_allow_html=True)
+    st.markdown("<div class=\'section-header\
+'>SITUAÇÃO ATUAL</div>", unsafe_allow_html=True)
     if not df.empty:
-        em_operacao_df = df[df["Saída CD"] == ''].copy()
+        em_operacao_df = df[df["Saída CD"] == ""].copy()
         m1, m2, m3 = st.columns(3)
         m1.metric(label="🚛 Em Operação (Total)", value=len(em_operacao_df))
-        m2.metric(label="🏭 Na Fábrica", value=len(em_operacao_df[em_operacao_df["Saída do pátio"] == '']))
-        m3.metric(label="📦 Em Rota / No CD", value=len(em_operacao_df) - len(em_operacao_df[em_operacao_df["Saída do pátio"] == '']))
+        m2.metric(label="🏭 Na Fábrica", value=len(em_operacao_df[em_operacao_df["Saída do pátio"] == ""]))
+        m3.metric(label="📦 Em Rota / No CD", value=len(em_operacao_df) - len(em_operacao_df[em_operacao_df["Saída do pátio"] == ""])) # Corrigido para usar len(em_operacao_df) - na_fabrica
         with st.expander("Ver Detalhes dos Veículos em Operação"):
             if em_operacao_df.empty: st.write("Nenhum veículo em operação.")
             else:
                 for _, row in em_operacao_df.iterrows():
-                    st.info(f"**Placa:** {row['Placa do caminhão']} | **Status Atual:** {obter_status(row)}")
+                    st.info(f"**Placa:** {row["Placa do caminhão"]} | **Status Atual:** {obter_status(row)}")
 
-    st.markdown("<div class=\'section-header\'>📈 INDICADORES DE PERFORMANCE (HOJE)</div>", unsafe_allow_html=True)
+    st.markdown("<div class=\'section-header\
+'>📈 INDICADORES DE PERFORMANCE (HOJE)</div>", unsafe_allow_html=True)
     if not df.empty:
-        hoje_str = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
-        df_hoje = df[pd.to_datetime(df['Data'], errors='coerce').dt.strftime('%Y-%m-%d') == hoje_str].copy()
+        hoje_str = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
+        df_hoje = df[pd.to_datetime(df["Data"], errors=\'coerce\
+').dt.strftime("%Y-%m-%d") == hoje_str].copy()
         if df_hoje.empty: st.info("Nenhum registro hoje para calcular as médias.")
         else:
-            def hhmm_para_minutos(t): return int(t.split(':')[0]) * 60 + int(t.split(':')[1]) if isinstance(t, str) and ':' in t else np.nan
+            def hhmm_para_minutos(t): return int(t.split(":")[0]) * 60 + int(t.split(":")[1]) if isinstance(t, str) and ":" in t else np.nan
             def calcular_media_tempo(s):
                 m = s.apply(hhmm_para_minutos).mean()
                 return f"{int(m // 60):02d}:{int(m % 60):02d}" if not pd.isna(m) else "N/D"
@@ -164,12 +171,12 @@ if st.session_state.pagina_atual == "Tela Inicial":
             c1, c2 = st.columns(2)
             with c1:
                 st.subheader("Métricas da Fábrica")
-                st.metric("Tempo Médio Esperando Doca", calcular_media_tempo(df_hoje['Tempo Espera Doca']))
-                st.metric("Tempo Médio de Carregamento", calcular_media_tempo(df_hoje['Tempo de Carregamento']))
+                st.metric("Tempo Médio Esperando Doca", calcular_media_tempo(df_hoje["Tempo Espera Doca"])) # Corrigido para usar df_hoje
+                st.metric("Tempo Médio de Carregamento", calcular_media_tempo(df_hoje["Tempo de Carregamento"])) # Corrigido para usar df_hoje
             with c2:
                 st.subheader("Métricas do CD")
-                st.metric("Tempo Médio de Percurso", calcular_media_tempo(df_hoje['Tempo Percurso Para CD']))
-                st.metric("Tempo Médio de Descarregamento", calcular_media_tempo(df_hoje['Tempo de Descarregamento CD']))
+                st.metric("Tempo Médio de Percurso", calcular_media_tempo(df_hoje["Tempo Percurso Para CD"])) # Corrigido para usar df_hoje
+                st.metric("Tempo Médio de Descarregamento", calcular_media_tempo(df_hoje["Tempo de Descarregamento CD"])) # Corrigido para usar df_hoje
 
 # =============================================================================
 # PÁGINA DE NOVO REGISTRO
@@ -177,7 +184,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
 elif st.session_state.pagina_atual == "Novo":
     botao_voltar()
     st.markdown("### 🆕 Novo Registro de Transferência")
-    if 'novo_registro_dict' not in st.session_state: st.session_state.novo_registro_dict = {}
+    if \'novo_registro_dict\' not in st.session_state: st.session_state.novo_registro_dict = {}
     
     def registrar_agora_novo(campo):
         st.session_state.novo_registro_dict[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
@@ -188,19 +195,20 @@ elif st.session_state.pagina_atual == "Novo":
             return
         with st.spinner("Salvando..."):
             reg = st.session_state.novo_registro_dict
-            reg['Data'] = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
+            reg["Data"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
             
             # Recalcula todos os tempos antes de salvar
-            reg['Tempo Espera Doca'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
-            reg['Tempo de Carregamento'] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
-            reg['Tempo Total'] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
-            reg['Tempo Percurso Para CD'] = calcular_tempo(reg.get("Saída do pátio"), reg.get("Entrada CD"))
-            reg['Tempo Espera Doca CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Encostou na doca CD"))
-            reg['Tempo de Descarregamento CD'] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
-            reg['Tempo Total CD'] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
+            reg["Tempo Espera Doca"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
+            reg["Tempo de Carregamento"] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
+            reg["Tempo Total"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
+            reg["Tempo Percurso Para CD"] = calcular_tempo(reg.get("Saída do pátio"), reg.get("Entrada CD"))
+            reg["Tempo Espera Doca CD"] = calcular_tempo(reg.get("Entrada CD"), reg.get("Encostou na doca CD"))
+            reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
+            reg["Tempo Total CD"] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
 
             try:
-                worksheet.append_row([reg.get(col, '') if reg.get(col, '') != '' else None for col in COLUNAS_ESPERADAS], value_input_option='USER_ENTERED')
+                worksheet.append_row([reg.get(col, "") if reg.get(col, "") != "" else None for col in COLUNAS_ESPERADAS], value_input_option=\'USER_ENTERED\
+')
                 st.cache_data.clear()
                 st.session_state.notification = ("success", "Novo registro salvo!")
                 del st.session_state.novo_registro_dict
@@ -229,32 +237,32 @@ elif st.session_state.pagina_atual == "Novo":
             del st.session_state.notification
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (CORRIGIDA)
+# PÁGINA DE EDIÇÃO (REFEITA PARA SER MAIS ROBUSTA)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
     st.markdown("### ✏️ Editar Registros Incompletos")
     df = carregar_dataframe(worksheet)
-    incompletos = df[df["Saída CD"] == ''].copy()
+    incompletos = df[df["Saída CD"] == ""].copy()
 
     if incompletos.empty:
         st.success("🎉 Todos os registros estão completos!"); st.stop()
 
-    opcoes = {f"🚛 {row['Placa do caminhão']} | 📅 {row['Data']}": idx for idx, row in incompletos.iterrows()}
+    opcoes = {f"🚛 {row["Placa do caminhão"]} | 📅 {row["Data"]}": idx for idx, row in incompletos.iterrows()}
     
     def carregar_registro_para_edicao():
         selecao = st.session_state.selectbox_edicao
         if selecao != "Selecione...":
             df_idx = opcoes[selecao]
             st.session_state.registro_em_edicao = df.loc[df_idx].to_dict()
-        elif 'registro_em_edicao' in st.session_state:
+        elif "registro_em_edicao" in st.session_state:
             del st.session_state.registro_em_edicao
 
     st.selectbox("Selecione um registro:", ["Selecione..."] + list(opcoes.keys()), key="selectbox_edicao", on_change=carregar_registro_para_edicao)
 
-    if 'registro_em_edicao' in st.session_state:
+    if "registro_em_edicao" in st.session_state:
         reg = st.session_state.registro_em_edicao
-        st.markdown(f"#### Editando Placa: **{reg['Placa do caminhão']}**")
+        st.markdown(f"#### Editando Placa: **{reg["Placa do caminhão"]}**")
 
         def registrar_agora_edit(campo):
             st.session_state.registro_em_edicao[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
@@ -265,18 +273,19 @@ elif st.session_state.pagina_atual == "Editar":
                 r = st.session_state.registro_em_edicao
                 
                 # Recalcula todos os tempos antes de salvar
-                r['Tempo Espera Doca'] = calcular_tempo(r.get("Entrada na Fábrica"), r.get("Encostou na doca Fábrica"))
-                r['Tempo de Carregamento'] = calcular_tempo(r.get("Início carregamento"), r.get("Fim carregamento"))
-                r['Tempo Total'] = calcular_tempo(r.get("Entrada na Fábrica"), r.get("Saída do pátio"))
-                r['Tempo Percurso Para CD'] = calcular_tempo(r.get("Saída do pátio"), r.get("Entrada CD"))
-                r['Tempo Espera Doca CD'] = calcular_tempo(r.get("Entrada CD"), r.get("Encostou na doca CD"))
-                r['Tempo de Descarregamento CD'] = calcular_tempo(r.get("Início Descarregamento CD"), r.get("Fim Descarregamento CD"))
-                r['Tempo Total CD'] = calcular_tempo(r.get("Entrada CD"), r.get("Saída CD"))
+                r["Tempo Espera Doca"] = calcular_tempo(r.get("Entrada na Fábrica"), r.get("Encostou na doca Fábrica"))
+                r["Tempo de Carregamento"] = calcular_tempo(r.get("Início carregamento"), r.get("Fim carregamento"))
+                r["Tempo Total"] = calcular_tempo(r.get("Entrada na Fábrica"), r.get("Saída do pátio"))
+                r["Tempo Percurso Para CD"] = calcular_tempo(r.get("Saída do pátio"), r.get("Entrada CD"))
+                r["Tempo Espera Doca CD"] = calcular_tempo(r.get("Entrada CD"), r.get("Encostou na doca CD"))
+                r["Tempo de Descarregamento CD"] = calcular_tempo(r.get("Início Descarregamento CD"), r.get("Fim Descarregamento CD"))
+                r["Tempo Total CD"] = calcular_tempo(r.get("Entrada CD"), r.get("Saída CD"))
                 
                 try:
-                    row_idx = r['df_index'] + 2
-                    valores = [r.get(col, '') if r.get(col, '') != '' else None for col in COLUNAS_ESPERADAS]
-                    worksheet.update(f'A{row_idx}', [valores], value_input_option='USER_ENTERED')
+                    row_idx = r["df_index"] + 2
+                    valores = [r.get(col, "") if r.get(col, "") != "" else None for col in COLUNAS_ESPERADAS]
+                    worksheet.update(f"A{row_idx}", [valores], value_input_option=\'USER_ENTERED\
+')
                     st.cache_data.clear()
                     st.session_state.notification = ("success", "Registro atualizado com sucesso!")
                     del st.session_state.registro_em_edicao
@@ -285,14 +294,13 @@ elif st.session_state.pagina_atual == "Editar":
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
+        # Lógica de exibição dos campos de tempo na edição, similar ao novo registro
         for campo in campos_tempo:
-            valor = reg.get(campo, '')
-            if isinstance(valor, str) and valor.strip():
-                st.success(f"✅ {campo}: {valor}")
+            valor_atual = reg.get(campo, "")
+            if valor_atual and str(valor_atual).strip():
+                st.success(f"✅ {campo}: {valor_atual}")
             else:
-                col1, col2 = st.columns([3, 1])
-                col1.info(f"📋 {campo} (Pendente)")
-                col2.button("⏰ Agora", key=f"btn_edit_{campo}", on_click=registrar_agora_edit, args=(campo,), use_container_width=True)
+                st.button(f"Registrar {campo}", key=f"btn_edit_{campo}", on_click=registrar_agora_edit, args=(campo,), use_container_width=True)
         
         st.markdown("---")
         if st.button("💾 SALVAR ALTERAÇÕES", use_container_width=True, type="primary", on_click=salvar_alteracoes):
@@ -318,10 +326,14 @@ elif st.session_state.pagina_atual in ["Em Operação", "Finalizadas"]:
     
     if st.session_state.pagina_atual == "Em Operação":
         st.markdown("### 📊 Registros em Operação")
-        subset_df = df[df["Saída CD"] == ''].copy()
+        subset_df = df[df["Saída CD"] == ""].copy()
         st.dataframe(subset_df) 
             
     elif st.session_state.pagina_atual == "Finalizadas":
         st.markdown("### ✅ Registros Finalizados")
-        subset_df = df[df["Saída CD"] != ''].copy()
+        subset_df = df[df["Saída CD"] != ""].copy()
         st.dataframe(subset_df)
+
+
+
+
