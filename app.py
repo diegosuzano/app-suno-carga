@@ -81,7 +81,7 @@ def carregar_dataframe(_worksheet):
     try:
         data = _worksheet.get_all_values()
         if len(data) < 2: return pd.DataFrame(columns=COLUNAS_ESPERADAS)
-        df = pd.DataFrame(data[1:], columns=data[0]).astype(str)
+        df = pd.DataFrame(data[1:], columns=data).astype(str)
         for col in COLUNAS_ESPERADAS:
             if col not in df.columns: df[col] = ''
         df = df[COLUNAS_ESPERADAS]
@@ -158,7 +158,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
         
         if df_hoje.empty: st.info("Nenhum registro hoje para calcular as médias.")
         else:
-            def hhmm_para_minutos(t): return int(t.split(":")[0]) * 60 + int(t.split(":")[1]) if isinstance(t, str) and ":" in t else np.nan
+            def hhmm_para_minutos(t): return int(t.split(":")) * 60 + int(t.split(":")) if isinstance(t, str) and ":" in t else np.nan
             def calcular_media_tempo(s):
                 m = s.apply(hhmm_para_minutos).mean()
                 return f"{int(m // 60):02d}:{int(m % 60):02d}" if not pd.isna(m) else "N/D"
@@ -220,7 +220,7 @@ elif st.session_state.pagina_atual == "Novo":
     
     st.markdown("---")
     
-    col_btn, col_msg = st.columns([1, 2])
+    col_btn, col_msg = st.columns()
     with col_btn:
         st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
     with col_msg:
@@ -242,24 +242,19 @@ elif st.session_state.pagina_atual == "Editar":
     if incompletos.empty:
         st.success("🎉 Todos os registros estão completos!"); st.stop()
 
-    # CRIA UM DICIONÁRIO DE OPÇÕES: O TEXTO PARA MOSTRAR E O ÍNDICE REAL COMO VALOR
     opcoes = {
         f"🚛 {row['Placa do caminhão']} | 📅 {pd.to_datetime(row['Data']).strftime('%Y-%m-%d')}": row.name
         for _, row in incompletos.iterrows()
     }
     
     def carregar_registro_para_edicao():
-        # PEGA O TEXTO SELECIONADO
         selecao_texto = st.session_state.selectbox_edicao
         if selecao_texto != "Selecione...":
-            # USA O TEXTO PARA ENCONTRAR O ÍNDICE REAL NO DICIONÁRIO
             df_index_real = opcoes[selecao_texto]
-            # CARREGA O REGISTRO USANDO O ÍNDICE REAL
             st.session_state.registro_em_edicao = df.loc[df_index_real].to_dict()
         elif "registro_em_edicao" in st.session_state:
             del st.session_state.registro_em_edicao
 
-    # O SELECTBOX MOSTRA AS CHAVES DO DICIONÁRIO (OS TEXTOS AMIGÁVEIS)
     st.selectbox(
         "Selecione um registro:", 
         options=["Selecione..."] + list(opcoes.keys()), 
@@ -305,7 +300,7 @@ elif st.session_state.pagina_atual == "Editar":
                 st.button(f"Registrar {campo}", key=f"btn_edit_{campo}", on_click=registrar_agora_edit, args=(campo,))
         
         st.markdown("---")
-        col_btn_edit, col_msg_edit = st.columns([1, 2])
+        col_btn_edit, col_msg_edit = st.columns()
         with col_btn_edit:
             st.button("💾 SALVAR ALTERAÇÕES", use_container_width=True, type="primary", on_click=salvar_alteracoes)
         with col_msg_edit:
@@ -330,4 +325,4 @@ elif st.session_state.pagina_atual in ["Em Operação", "Finalizadas"]:
     elif st.session_state.pagina_atual == "Finalizadas":
         st.markdown("### ✅ Registros Finalizados")
         subset_df = df[df["Saída CD"] != ""].copy()
-        st.dataframe(subset_df)```
+        st.dataframe(subset_df)
