@@ -298,15 +298,15 @@ elif st.session_state.pagina_atual == "Editar":
 
                     # Salva a linha inteira na planilha
                     try:
-                        row_idx = reg["df_index"] + 2
+                        row_idx = int(reg["df_index"]) + 2
                         valores = [reg.get(col, "") for col in COLUNAS_ESPERADAS]
                         worksheet.update(f"A{row_idx}", [valores], value_input_option='USER_ENTERED')
-                        st.cache_data.clear()
-                        st.success(f"✅ '{campo_a_registrar}' registrado com sucesso!")
                         
-                        # Limpa o estado para a próxima ação
-                        del st.session_state.campo_para_registrar
-                        st.rerun()
+                        # CORREÇÃO FINAL: Limpar o cache e o estado para forçar o recarregamento
+                        st.cache_data.clear()
+                        st.session_state.campo_para_registrar = None
+                        st.success(f"✅ '{campo_a_registrar}' registrado com sucesso!")
+                        st.rerun() # Força o recarregamento para mostrar os dados atualizados
                     except Exception as e:
                         st.error(f"❌ Falha ao salvar: {e}")
 
