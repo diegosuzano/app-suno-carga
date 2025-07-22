@@ -16,7 +16,7 @@ campos_tempo = [
     "Fim Descarregamento CD", "Saída CD"
 ]
 campos_calculados = [
-    "Tempo Espera Doca", "Tempo de Carregamento", "Tempo Total", 
+    "Tempo Espera Doca", "Tempo de Carregamento", "Tempo Total",
     "Tempo Percurso Para CD", "Tempo Espera Doca CD", "Tempo de Descarregamento CD", "Tempo Total CD"
 ]
 COLUNAS_ESPERADAS = ["Data", "Placa do caminhão", "Nome do conferente"] + campos_tempo + campos_calculados
@@ -27,7 +27,7 @@ if 'pagina_atual' not in st.session_state:
 
 # --- CONFIGURAÇÃO DA PÁGINA E CSS ---
 st.set_page_config(
-    page_title="Suzano - Controle de Carga", 
+    page_title="Suzano - Controle de Carga",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -59,8 +59,12 @@ st.markdown("""
         padding: 15px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
+    /* Adiciona um pouco de espaço abaixo dos botões "Agora" para melhor visualização */
+    .stButton {
+        margin-bottom: 5px;
+    }
 </style>
-""", unsafe_allow_html=True) 
+""", unsafe_allow_html=True)
 
 # --- FUNÇÕES DE CONEXÃO E DADOS ---
 @st.cache_resource(show_spinner="Conectando ao Google Sheets...")
@@ -73,7 +77,7 @@ def connect_to_google_sheets():
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
             scopes=scopes
-         )
+          )
         client = gspread.authorize(creds)
         spreadsheet = client.open(NOME_PLANILHA)
         return spreadsheet.sheet1
@@ -88,11 +92,11 @@ def carregar_dataframe(_worksheet):
         data = _worksheet.get_all_values()
         if len(data) < 2:
             return pd.DataFrame(columns=COLUNAS_ESPERADAS)
-        
+
         df = pd.DataFrame(data[1:], columns=data[0]).astype(str)
         for col in COLUNAS_ESPERADAS:
             if col not in df.columns: df[col] = ''
-        
+
         df = df[COLUNAS_ESPERADAS]
         df['Data'] = pd.to_datetime(df['Data'], errors='coerce').dt.date
         df['df_index'] = df.index
@@ -200,7 +204,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
                     h, m = map(int, str(tempo_str).split(':'))
                     return h * 60 + m
                 except: return np.nan
-            
+
             def calcular_media_tempo(series):
                 minutos = series.apply(hhmm_para_minutos).mean()
                 if pd.isna(minutos): return "N/D"
@@ -244,10 +248,12 @@ elif st.session_state.pagina_atual == "Novo":
 
         with st.spinner("Salvando no Google Sheets..."):
             st.session_state.novo_registro_dict['Data'] = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
-            
-            for campo in campos_calculados:
-                st.session_state.novo_registro_dict[campo] = "" # Limpa antes de recalcular
 
+            # Limpa campos calculados antes de recalcular
+            for campo in campos_calculados:
+                st.session_state.novo_registro_dict[campo] = ""
+
+            # Recalcula todos os tempos
             st.session_state.novo_registro_dict['Tempo Espera Doca'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada na Fábrica"), st.session_state.novo_registro_dict.get("Encostou na doca Fábrica"))
             st.session_state.novo_registro_dict['Tempo de Carregamento'] = calcular_tempo(st.session_state.novo_registro_dict.get("Início carregamento"), st.session_state.novo_registro_dict.get("Fim carregamento"))
             st.session_state.novo_registro_dict['Tempo Total'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada na Fábrica"), st.session_state.novo_registro_dict.get("Saída do pátio"))
@@ -256,8 +262,8 @@ elif st.session_state.pagina_atual == "Novo":
             st.session_state.novo_registro_dict['Tempo de Descarregamento CD'] = calcular_tempo(st.session_state.novo_registro_dict.get("Início Descarregamento CD"), st.session_state.novo_registro_dict.get("Fim Descarregamento CD"))
             st.session_state.novo_registro_dict['Tempo Total CD'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada CD"), st.session_state.novo_registro_dict.get("Saída CD"))
 
-            nova_linha_lista = [st.session_state.novo_registro_dict.get(col) if st.session_state.novo_registro_dict.get(col, '') != '' else None for col in COLUNAS_ESPERADAS]
-            
+            nova_linha_lista = [st.session_state.novo_registro_dict.get(col, '') for col in COLUNAS_ESPERADAS]
+
             try:
                 worksheet.append_row(nova_linha_lista, value_input_option='USER_ENTERED')
                 st.cache_data.clear()
@@ -277,9 +283,9 @@ elif st.session_state.pagina_atual == "Novo":
             st.success(f"✅ {campo}: {st.session_state.novo_registro_dict[campo]}")
         else:
             st.button(f"Registrar {campo}", key=f"btn_novo_{campo}", on_click=registrar_agora_novo, args=(campo,))
-    
+
     st.markdown("---")
-    
+
     col_btn, col_msg = st.columns([1, 2])
     with col_btn:
         st.button("💾 SALVAR NOVO REGISTRO", on_click=salvar_novo_registro, use_container_width=True, type="primary")
@@ -301,10 +307,11 @@ elif st.session_state.pagina_atual == "Editar":
     incompletos = df[df["Saída CD"] == ''].copy()
 
     if incompletos.empty:
-        st.success("🎉 Todos os registros estão completos!"); st.stop()
+        st.success("🎉 Todos os registros estão completos!")
+        st.stop()
 
     opcoes = {f"🚛 {row['Placa do caminhão']} | 📅 {row['Data']}": idx for idx, row in incompletos.iterrows()}
-    
+
     def carregar_registro_para_edicao():
         selecao_atual = st.session_state.selectbox_edicao
         if selecao_atual != "Selecione...":
@@ -332,62 +339,59 @@ elif st.session_state.pagina_atual == "Editar":
         def salvar_alteracoes():
             with st.spinner("Salvando no Google Sheets..."):
                 registro_para_salvar = st.session_state.registro_em_edicao
-                
-                for campo in campos_calculados:
-                    registro_para_salvar[campo] = "" # Limpa antes de recalcular
 
-                registro_para_salvar['Tempo Espera Doca'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Encostou na doca Fábrica"))
-                registro_para_salvar['Tempo de Carregamento'] = calcular_tempo(registro_para_salvar.get("Início carregamento"), registro_para_salvar.get("Fim carregamento"))
-                registro_para_salvar['Tempo Total'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Saída do pátio"))
-                registro_para_salvar['Tempo Percurso Para CD'] = calcular_tempo(registro_para_salvar.get("Saída do pátio"), registro_para_salvar.get("Entrada CD"))
-                registro_para_salvar['Tempo Espera Doca CD'] = calcular_tempo(registro_para_salvar.get("Entrada CD"), registro_para_salvar.get("Encostou na doca CD"))
-                registro_para_salvar['Tempo de Descarregamento CD'] = calcular_tempo(registro_para_salvar.get("Início Descarregamento CD"), registro_para_salvar.get("Fim Descarregamento CD"))
-                registro_para_salvar['Tempo Total CD'] = calcular_tempo(registro_para_salvar.get("Entrada CD"), registro_para_salvar.get("Saída CD"))
+                # --- CORREÇÃO 1: CÁLCULO CONDICIONAL ---
+                # Recalcula os tempos apenas se os campos necessários estiverem preenchidos.
+                if registro_para_salvar.get("Entrada na Fábrica") and registro_para_salvar.get("Encostou na doca Fábrica"):
+                    registro_para_salvar['Tempo Espera Doca'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Encostou na doca Fábrica"))
+                if registro_para_salvar.get("Início carregamento") and registro_para_salvar.get("Fim carregamento"):
+                    registro_para_salvar['Tempo de Carregamento'] = calcular_tempo(registro_para_salvar.get("Início carregamento"), registro_para_salvar.get("Fim carregamento"))
+                if registro_para_salvar.get("Entrada na Fábrica") and registro_para_salvar.get("Saída do pátio"):
+                    registro_para_salvar['Tempo Total'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Saída do pátio"))
+                if registro_para_salvar.get("Saída do pátio") and registro_para_salvar.get("Entrada CD"):
+                    registro_para_salvar['Tempo Percurso Para CD'] = calcular_tempo(registro_para_salvar.get("Saída do pátio"), registro_para_salvar.get("Entrada CD"))
+                if registro_para_salvar.get("Entrada CD") and registro_para_salvar.get("Encostou na doca CD"):
+                    registro_para_salvar['Tempo Espera Doca CD'] = calcular_tempo(registro_para_salvar.get("Entrada CD"), registro_para_salvar.get("Encostou na doca CD"))
+                if registro_para_salvar.get("Início Descarregamento CD") and registro_para_salvar.get("Fim Descarregamento CD"):
+                    registro_para_salvar['Tempo de Descarregamento CD'] = calcular_tempo(registro_para_salvar.get("Início Descarregamento CD"), registro_para_salvar.get("Fim Descarregamento CD"))
+                if registro_para_salvar.get("Entrada CD") and registro_para_salvar.get("Saída CD"):
+                    registro_para_salvar['Tempo Total CD'] = calcular_tempo(registro_para_salvar.get("Entrada CD"), registro_para_salvar.get("Saída CD"))
 
                 try:
                     gsheet_row_index = reg['df_index'] + 2
-                    # >>> INÍCIO DA CORREÇÃO FINAL <<<
-                    # Converte strings vazias para None para limpar a célula no Google Sheets
-                    valores_para_salvar = [registro_para_salvar.get(col) if registro_para_salvar.get(col, '') != '' else None for col in COLUNAS_ESPERADAS]
-                    # >>> FIM DA CORREÇÃO FINAL <<<
-                    
+                    # Converte strings vazias e outros "falsy" values para None para limpar a célula no Google Sheets
+                    valores_para_salvar = [registro_para_salvar.get(col) if registro_para_salvar.get(col, '') else None for col in COLUNAS_ESPERADAS]
+
                     worksheet.update(f'A{gsheet_row_index}', [valores_para_salvar], value_input_option='USER_ENTERED')
                     st.cache_data.clear()
                     st.session_state.notification = ("success", "Registro atualizado com sucesso!")
                     del st.session_state.registro_em_edicao
                     st.session_state.selectbox_edicao = "Selecione..."
+                    st.rerun() # Força a recarga da página para refletir as mudanças
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
+        # --- CORREÇÃO 2: LÓGICA DE EXIBIÇÃO ---
         for campo in campos_tempo:
-            valor_a_exibir = reg.get(campo, '')
-
-            if valor_a_exibir and str(valor_a_exibir).strip() != '':
-                st.text_input(
-                    label=f"✅ {campo}", 
-                    value=str(valor_a_exibir), 
-                    disabled=True, 
-                    key=f"input_edit_disabled_{campo}"
-                )
+            valor_atual = reg.get(campo, '')
+            # Verifica se o valor é uma string não vazia.
+            if isinstance(valor_atual, str) and valor_atual.strip():
+                st.success(f"✅ {campo}: {valor_atual}")
             else:
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.text_input(
-                        label=f"📋 {campo}", 
-                        value="", 
-                        disabled=True, 
-                        key=f"input_edit_enabled_{campo}"
-                    )
+                    st.text_input(f"📋 {campo}", value="Pendente...", disabled=True, key=f"placeholder_{campo}")
                 with col2:
                     st.button(
-                        "⏰ Agora", 
+                        "⏰ Agora",
                         key=f"btn_now_edit_{campo}",
-                        on_click=registrar_agora_edit, 
-                        args=(campo,)
+                        on_click=registrar_agora_edit,
+                        args=(campo,),
+                        use_container_width=True
                     )
-        
+
         st.markdown("---")
-        
+
         col_btn_edit, col_msg_edit = st.columns([1, 2])
         with col_btn_edit:
             st.button("💾 SALVAR ALTERAÇÕES", on_click=salvar_alteracoes, use_container_width=True, type="primary")
@@ -395,7 +399,6 @@ elif st.session_state.pagina_atual == "Editar":
             if st.session_state.get("notification"):
                 msg_type, msg_text = st.session_state.notification
                 if msg_type == "success": st.success(msg_text)
-                elif msg_type == "warning": st.warning(msg_text)
                 else: st.error(msg_text)
                 del st.session_state.notification
 
@@ -405,12 +408,12 @@ elif st.session_state.pagina_atual == "Editar":
 elif st.session_state.pagina_atual in ["Em Operação", "Finalizadas"]:
     botao_voltar()
     df = carregar_dataframe(worksheet)
-    
+
     if st.session_state.pagina_atual == "Em Operação":
         st.markdown("### 📊 Registros em Operação")
         subset_df = df[df["Saída CD"] == ''].copy()
-        st.dataframe(subset_df) 
-            
+        st.dataframe(subset_df)
+
     elif st.session_state.pagina_atual == "Finalizadas":
         st.markdown("### ✅ Registros Finalizados")
         subset_df = df[df["Saída CD"] != ''].copy()
