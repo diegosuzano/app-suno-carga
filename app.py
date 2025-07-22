@@ -6,9 +6,9 @@ from google.oauth2.service_account import Credentials
 
 # --- CONFIGURAÇÕES GERAIS ---
 NOME_PLANILHA = "Controle de Carga Suzano"
-FUSO_HORARIO = timezone(timedelta(hours=-3))
+FUSO_HORARIO = timezone(timedelta(hours=-3))  # Horário de Brasília
 
-# ORDEM COMPLETA DOS EVENTOS (respeitando seu fluxo)
+# ORDEM COMPLETA DOS EVENTOS
 eventos_fabrica = [
     "Entrada na Balança Fábrica",
     "Saída balança Fábrica",
@@ -34,13 +34,13 @@ eventos_cd = [
 campos_tempo = eventos_fabrica + eventos_cd
 
 campos_calculados = [
-    "Tempo Espera Doca",          # Fábrica: Entrada → Encostou
-    "Tempo de Carregamento",      # Fábrica: Início → Fim
-    "Tempo Total",                # Fábrica: Entrada → Saída do pátio
+    "Tempo Espera Doca",          # Entrada na Fábrica → Encostou na doca Fábrica
+    "Tempo de Carregamento",      # Início → Fim carregamento
+    "Tempo Total",                # Entrada na Fábrica → Saída do pátio
     "Tempo Percurso Para CD",     # Saída do pátio → Entrada CD
-    "Tempo Espera Doca CD",       # CD: Entrada CD → Encostou CD
-    "Tempo de Descarregamento CD", # CD: Início → Fim descarga
-    "Tempo Total CD"              # CD: Entrada CD → Saída CD
+    "Tempo Espera Doca CD",       # Entrada CD → Encostou na doca CD
+    "Tempo de Descarregamento CD", # Início → Fim descarga CD
+    "Tempo Total CD"              # Entrada CD → Saída CD
 ]
 
 COLUNAS_ESPERADAS = (
@@ -212,60 +212,78 @@ if st.session_state.pagina_atual == "Tela Inicial":
         m3.metric("📦 No CD / Rota", len(operacao) - len(operacao[operacao["Saída do pátio"] == ""]))
 
 # =============================================================================
-# NOVO REGISTRO
+# NOVO REGISTRO (APENAS ENTRADA NA BALANÇA FÁBRICA)
 # =============================================================================
 elif st.session_state.pagina_atual == "Novo":
     botao_voltar()
-    st.markdown("### 🆕 NOVO REGISTRO")
+    st.markdown("### 🆕 NOVO REGISTRO - Entrada na Fábrica")
 
-    if 'novo_registro' not in st.session_state:
-        st.session_state.novo_registro = {"Data": datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")}
+    if 'novo_registro_dict' not in st.session_state:
+        st.session_state.novo_registro_dict = {"Data": datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")}
 
-    reg = st.session_state.novo_registro
+    reg = st.session_state.novo_registro_dict
 
-    reg["Placa do caminhão"] = st.text_input("🚛 Placa", reg.get("Placa do caminhão", ""))
-    reg["Nome do conferente"] = st.text_input("👤 Conferente", reg.get("Nome do conferente", ""))
+    reg["Placa do caminhão"] = st.text_input("🚛 Placa do Caminhão", reg.get("Placa do caminhão", ""), key="placa_novo").upper().strip()
+    reg["Nome do conferente"] = st.text_input("👤 Nome do Conferente", reg.get("Nome do conferente", ""), key="conferente_novo")
 
     st.markdown("---")
-    st.markdown("### ⏳ ETAPAS DA OPERAÇÃO")
+    
+    # Único campo registrado aqui
+    campo_inicio = "Entrada na Balança Fábrica"
+    valor_atual = reg.get(campo_inicio, "")
 
-    for i, campo in enumerate(campos_tempo):
-        valor = reg.get(campo, "")
-        anterior_preenchido = True if i == 0 else bool(reg.get(campos_tempo[i-1]))
+    if valor_atual:
+        st.success(f"✅ {campo_inicio}: `{valor_atual}`")
+    else:
+        if st.button(f"📌 Registrar {campo_inicio}", type="primary", use_container_width=True):
+            reg[campo_inicio] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+            st.rerun()
 
-        if valor:
-            st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor}`</span>", unsafe_allow_html=True)
-        elif anterior_preenchido:
-            if st.button(f"⏰ Registrar {campo}", key=f"btn_{campo}", use_container_width=True):
-                reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
-                # SALVAR NA PLANILHA IMEDIATAMENTE
-                try:
-                    worksheet.append_row([reg.get(col, "") or None for col in COLUNAS_ESPERADAS], value_input_option='USER_ENTERED')
-                    st.cache_data.clear()
-                    st.success(f"✅ {campo} registrado e salvo!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Falha ao salvar: {e}")
-        else:
-            st.markdown(f"<span class='etapa-bloqueada'>🔴 {campo} (aguarde etapa anterior)</span>", unsafe_allow_html=True)
+    st.markdown("---")
+
+    if st.button("💾 FINALIZAR E CRIAR REGISTRO", 
+                 type="secondary", 
+                 use_container_width=True,
+                 disabled=not all(reg.get(k) for k in ["Placa do caminhão", "Nome do conferente", campo_inicio])):
+        
+        with st.spinner("Criando registro..."):
+            # Preencher apenas os dados iniciais
+            reg["Data"] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
+            
+            # Deixar todos os outros campos vazios
+            for campo in campos_tempo + campos_calculados:
+                if campo not in reg:
+                    reg[campo] = ""
+            
+            try:
+                worksheet.append_row([reg.get(col, "") or None for col in COLUNAS_ESPERADAS], value_input_option='USER_ENTERED')
+                st.cache_data.clear()
+                st.success("✅ Registro criado com sucesso! Agora você pode editar as próximas etapas.")
+                
+                del st.session_state.novo_registro_dict
+                st.session_state.notification = ("success", "Registro inicial criado.")
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Falha ao salvar: {e}")
 
 # =============================================================================
-# EDITAR REGISTRO
+# EDITAR REGISTRO (FORÇA ORDEM DOS EVENTOS)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
-    st.markdown("### ✏️ EDITAR REGISTROS")
+    st.markdown("### ✏️ EDITAR REGISTROS EM ANDAMENTO")
 
     df = carregar_dados()
     incompletos = df[df["Saída CD"] == ""].copy()
 
     if incompletos.empty:
-        st.success("🎉 Todos completos!")
+        st.success("🎉 Todos os registros estão completos!")
         st.stop()
 
     opcoes = {
-        f"🚛 {r['Placa do caminhão']} | {obter_status(r)}": idx
-        for idx, r in incompletos.iterrows()
+        f"🚛 {row['Placa do caminhão']} | {obter_status(row)}": idx
+        for idx, row in incompletos.iterrows()
     }
 
     selecao = st.selectbox("Selecione:", ["Selecione..."] + list(opcoes.keys()))
@@ -277,16 +295,28 @@ elif st.session_state.pagina_atual == "Editar":
             st.session_state.idx_edit = idx
 
         reg = st.session_state.registro_edit
-        st.markdown(f"**Placa:** `{reg['Placa do caminhão']}`")
+        st.markdown(f"**Placa:** `{reg['Placa do caminhão']}` | **Conferente:** {reg['Nome do conferente']}")
+        st.markdown("---")
 
-        for campo in campos_tempo:
+        # Força a ordem dos eventos
+        for i, campo in enumerate(campos_tempo):
             valor = reg.get(campo, "")
+            anterior_preenchido = True if i == 0 else bool(reg.get(campos_tempo[i-1]))
+
             if valor:
                 st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor}`</span>", unsafe_allow_html=True)
-            else:
+            elif anterior_preenchido:
                 if st.button(f"⏰ Registrar {campo}", key=f"edit_{campo}", use_container_width=True):
                     reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
-                    # ATUALIZAR LINHA NA PLANILHA
+                    # Atualiza cálculos automáticos
+                    reg["Tempo Espera Doca"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Encostou na doca Fábrica"))
+                    reg["Tempo de Carregamento"] = calcular_tempo(reg.get("Início carregamento"), reg.get("Fim carregamento"))
+                    reg["Tempo Total"] = calcular_tempo(reg.get("Entrada na Fábrica"), reg.get("Saída do pátio"))
+                    reg["Tempo Percurso Para CD"] = calcular_tempo(reg.get("Saída do pátio"), reg.get("Entrada CD"))
+                    reg["Tempo Espera Doca CD"] = calcular_tempo(reg.get("Entrada CD"), reg.get("Encostou na doca CD"))
+                    reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
+                    reg["Tempo Total CD"] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
+
                     try:
                         row_idx = idx + 2
                         valores = [reg.get(col, "") or None for col in COLUNAS_ESPERADAS]
@@ -295,7 +325,9 @@ elif st.session_state.pagina_atual == "Editar":
                         st.success(f"✅ {campo} atualizado!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ Erro: {e}")
+                        st.error(f"❌ Erro ao salvar: {e}")
+            else:
+                st.markdown(f"<span class='etapa-bloqueada'>🔴 {campo} (aguarde etapa anterior)</span>", unsafe_allow_html=True)
 
 # =============================================================================
 # VISUALIZAÇÃO
@@ -303,9 +335,9 @@ elif st.session_state.pagina_atual == "Editar":
 elif st.session_state.pagina_atual == "Em Operação":
     botao_voltar()
     df = carregar_dados()
-    st.dataframe(df[df["Saída CD"] == ""], use_container_width=True)
+    st.dataframe(df[df["Saída CD"] == ""], use_container_width=True, hide_index=True)
 
 elif st.session_state.pagina_atual == "Finalizadas":
     botao_voltar()
     df = carregar_dados()
-    st.dataframe(df[df["Saída CD"] != ""], use_container_width=True)
+    st.dataframe(df[df["Saída CD"] != ""], use_container_width=True, hide_index=True)
