@@ -152,9 +152,9 @@ if st.session_state.pagina_atual == "Tela Inicial":
 
     st.markdown("<div class='section-header'>📈 INDICADORES DE PERFORMANCE (HOJE)</div>", unsafe_allow_html=True)
     if not df.empty:
-        hoje_str = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
-        df['Data_str'] = pd.to_datetime(df['Data'], errors='coerce').dt.strftime('%Y-%m-%d')
-        df_hoje = df[df['Data_str'] == hoje_str].copy()
+        df['Data_dt'] = pd.to_datetime(df['Data'], errors='coerce').dt.date
+        hoje = datetime.now(FUSO_HORARIO).date()
+        df_hoje = df[df['Data_dt'] == hoje].copy()
         
         if df_hoje.empty: st.info("Nenhum registro hoje para calcular as médias.")
         else:
@@ -231,7 +231,7 @@ elif st.session_state.pagina_atual == "Novo":
             del st.session_state.notification
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (LÓGICA RESTAURADA E CORRIGIDA)
+# PÁGINA DE EDIÇÃO (LÓGICA SIMPLIFICADA E CORRIGIDA)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -242,17 +242,26 @@ elif st.session_state.pagina_atual == "Editar":
     if incompletos.empty:
         st.success("🎉 Todos os registros estão completos!"); st.stop()
 
-    opcoes = {f"🚛 {row['Placa do caminhão']} | 📅 {pd.to_datetime(row['Data']).strftime('%Y-%m-%d')}": idx for idx, row in incompletos.iterrows()}
+    # Usa o índice real do DataFrame como valor na opção para evitar duplicatas
+    opcoes = {f"🚛 {row['Placa do caminhão']} | 📅 {pd.to_datetime(row['Data']).strftime('%Y-%m-%d')}": row['df_index'] for _, row in incompletos.iterrows()}
     
     def carregar_registro_para_edicao():
-        selecao = st.session_state.selectbox_edicao
-        if selecao != "Selecione...":
-            df_idx = opcoes[selecao]
-            st.session_state.registro_em_edicao = df.loc[df_idx].to_dict()
+        selecao_idx = st.session_state.selectbox_edicao
+        if selecao_idx != "Selecione...":
+            # O valor da opção agora é o índice real do DataFrame
+            df_index_real = selecao_idx
+            st.session_state.registro_em_edicao = df.loc[df_index_real].to_dict()
         elif "registro_em_edicao" in st.session_state:
             del st.session_state.registro_em_edicao
 
-    st.selectbox("Selecione um registro:", ["Selecione..."] + list(opcoes.keys()), key="selectbox_edicao", on_change=carregar_registro_para_edicao)
+    # Passa o índice real como valor da opção
+    selecao_label = st.selectbox(
+        "Selecione um registro:", 
+        options=["Selecione..."] + list(opcoes.keys()), 
+        format_func=lambda x: x if isinstance(x, str) else opcoes.get(x, "Selecione..."),
+        key="selectbox_edicao",
+        on_change=carregar_registro_para_edicao
+    )
 
     if "registro_em_edicao" in st.session_state:
         reg = st.session_state.registro_em_edicao
@@ -284,16 +293,13 @@ elif st.session_state.pagina_atual == "Editar":
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
+        # Lógica de exibição dos campos de tempo na edição, igual ao novo registro
         for campo in campos_tempo:
             valor_atual = reg.get(campo, "")
             if valor_atual and str(valor_atual).strip():
-                st.text_input(f"✅ {campo}", value=str(valor_atual), disabled=True, key=f"disp_edit_{campo}")
+                st.success(f"✅ {campo}: {valor_atual}")
             else:
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.text_input(f"📋 {campo}", value="", disabled=True, key=f"input_edit_{campo}")
-                with col2:
-                    st.button("⏰ Agora", key=f"btn_edit_{campo}", on_click=registrar_agora_edit, args=(campo,))
+                st.button(f"Registrar {campo}", key=f"btn_edit_{campo}", on_click=registrar_agora_edit, args=(campo,))
         
         st.markdown("---")
         col_btn_edit, col_msg_edit = st.columns([1, 2])
