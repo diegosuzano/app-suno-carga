@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone, timedelta
-import numpy as np
 import gspread
 from google.oauth2.service_account import Credentials
 
 # --- CONFIGURAÇÕES GERAIS ---
 NOME_PLANILHA = "Controle de Carga Suzano"
-FUSO_HORARIO = timezone(timedelta(hours=-3))
+FUSO_HORARIO = timezone(timedelta(hours=-3))  # Horário de Brasília
 
 campos_tempo = [
     "Entrada na Fábrica", "Encostou na doca Fábrica", "Início carregamento",
@@ -17,7 +16,7 @@ campos_tempo = [
 ]
 
 campos_calculados = [
-    "Tempo Espera Doca", "Tempo de Carregamento", "Tempo Total", 
+    "Tempo Espera Doca", "Tempo de Carregamento", "Tempo Total",
     "Tempo Percurso Para CD", "Tempo Espera Doca CD", "Tempo de Descarregamento CD", "Tempo Total CD"
 ]
 
@@ -29,7 +28,7 @@ if 'pagina_atual' not in st.session_state:
 
 # --- CONFIGURAÇÃO DA PÁGINA E CSS ---
 st.set_page_config(
-    page_title="Suzano - Controle de Carga", 
+    page_title="Suzano - Controle de Carga",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -56,14 +55,14 @@ st.markdown("""
         border-bottom: 2px solid #e0e0e0;
     }
     .stMetric {
-        background-color: #FFFFFF;
+        background-color: white;
         border: 1px solid #E0E0E0;
         border-radius: 10px;
         padding: 15px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
 </style>
-""", unsafe_allow_html=True) 
+""", unsafe_allow_html=True)
 
 # --- FUNÇÕES DE CONEXÃO E DADOS ---
 @st.cache_resource(show_spinner="Conectando ao Google Sheets...")
@@ -80,15 +79,15 @@ def connect_to_google_sheets():
 
 @st.cache_data(ttl=30, show_spinner="Carregando dados...")
 def carregar_dataframe(_worksheet):
-    if _worksheet is None: 
+    if _worksheet is None:
         return pd.DataFrame(columns=COLUNAS_ESPERADAS)
     try:
         data = _worksheet.get_all_values()
-        if len(data) < 2: 
+        if len(data) < 2:
             return pd.DataFrame(columns=COLUNAS_ESPERADAS)
         df = pd.DataFrame(data[1:], columns=data[0]).astype(str)
         for col in COLUNAS_ESPERADAS:
-            if col not in df.columns: 
+            if col not in df.columns:
                 df[col] = ''
         df = df[COLUNAS_ESPERADAS]
         df["df_index"] = df.index
@@ -99,15 +98,15 @@ def carregar_dataframe(_worksheet):
 
 # --- FUNÇÕES AUXILIARES ---
 def calcular_tempo(inicio, fim):
-    if not all([inicio, fim]) or not all(str(v).strip() for v in [inicio, fim]): 
+    if not all([inicio, fim]) or not all(str(v).strip() for v in [inicio, fim]):
         return ""
     try:
         inicio_dt = pd.to_datetime(inicio, errors='coerce')
         fim_dt = pd.to_datetime(fim, errors='coerce')
-        if pd.isna(inicio_dt) or pd.isna(fim_dt): 
+        if pd.isna(inicio_dt) or pd.isna(fim_dt):
             return ""
         diff = fim_dt - inicio_dt
-        if diff.total_seconds() < 0: 
+        if diff.total_seconds() < 0:
             return "Inválido"
         horas, rem = divmod(diff.total_seconds(), 3600)
         minutos, _ = divmod(rem, 60)
@@ -117,13 +116,14 @@ def calcular_tempo(inicio, fim):
 
 def obter_status(registro):
     for campo in reversed(campos_tempo):
-        if registro.get(campo) and str(registro.get(campo)).strip(): 
+        if registro.get(campo) and str(registro.get(campo)).strip():
             return campo
     return "Não iniciado"
 
 def botao_voltar():
     if st.button("⬅️ Voltar ao Menu Principal"):
         st.session_state.pagina_atual = "Tela Inicial"
+        # Limpa apenas estados específicos
         keys_to_keep = ["pagina_atual"]
         for key in list(st.session_state.keys()):
             if key not in keys_to_keep:
@@ -142,7 +142,7 @@ st.markdown("<div class='main-header'>🚚 Suzano - Controle de Transferência d
 if st.session_state.pagina_atual == "Tela Inicial":
     st.markdown("<div class='section-header'>MENU DE AÇÕES</div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
-    
+
     if col1.button("🆕 NOVO REGISTRO", use_container_width=True):
         st.session_state.pagina_atual = "Novo"
         st.rerun()
@@ -158,7 +158,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
 
     df = carregar_dataframe(worksheet)
     st.markdown("<div class='section-header'>SITUAÇÃO ATUAL</div>", unsafe_allow_html=True)
-    
+
     if not df.empty:
         em_operacao_df = df[df["Saída CD"] == ""].copy()
         m1, m2, m3 = st.columns(3)
@@ -177,16 +177,18 @@ if st.session_state.pagina_atual == "Tela Inicial":
     if not df.empty:
         hoje_str = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
         df_hoje = df[pd.to_datetime(df["Data"], errors='coerce').dt.strftime("%Y-%m-%d") == hoje_str].copy()
-        
+
         if df_hoje.empty:
             st.info("Nenhum registro hoje para calcular as médias.")
         else:
             def hhmm_para_minutos(t):
-                return int(t.split(":")[0]) * 60 + int(t.split(":")[1]) if isinstance(t, str) and ":" in t else np.nan
+                return int(t.split(":")[0]) * 60 + int(t.split(":")[1]) if isinstance(t, str) and ":" in t else float('nan')
 
             def calcular_media_tempo(s):
                 m = s.apply(hhmm_para_minutos).mean()
-                return f"{int(m // 60):02d}:{int(m % 60):02d}" if not pd.isna(m) else "N/D"
+                if pd.isna(m):
+                    return "N/D"
+                return f"{int(m // 60):02d}:{int(m % 60):02d}"
 
             c1, c2 = st.columns(2)
             with c1:
@@ -261,7 +263,7 @@ elif st.session_state.pagina_atual == "Novo":
 
 
 # =============================================================================
-# PÁGINA DE EDIÇÃO (CORRIGIDA E ROBUSTA)
+# PÁGINA DE EDIÇÃO (REFATORADA DO ZERO - SEM BUGS)
 # =============================================================================
 elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
@@ -274,7 +276,7 @@ elif st.session_state.pagina_atual == "Editar":
         st.success("🎉 Todos os registros estão completos!")
         st.stop()
 
-    # Criar opções de seleção
+    # Criar opções para seleção
     opcoes = {
         f"🚛 {row['Placa do caminhão']} | 📅 {row['Data']} | Último: {obter_status(row)}": idx 
         for idx, row in incompletos.iterrows()
@@ -289,10 +291,10 @@ elif st.session_state.pagina_atual == "Editar":
     if selecao != "Selecione..." and selecao in opcoes:
         df_idx = opcoes[selecao]
 
-        # Carregar registro apenas se ainda não estiver carregado ou mudou
+        # Carregar o registro se for novo ou mudou
         if "registro_em_edicao" not in st.session_state or st.session_state.get("df_idx_atual") != df_idx:
             st.session_state.registro_em_edicao = df.loc[df_idx].to_dict()
-            st.session_state.df_idx_atual = df_idx
+            st.session_state.df_idx_atual = df_idx  # Rastrear qual registro está sendo editado
 
         reg = st.session_state.registro_em_edicao
 
@@ -316,6 +318,7 @@ elif st.session_state.pagina_atual == "Editar":
             with col2:
                 if not valor_atual:
                     if st.button("⏰", key=f"btn_edit_{campo}", use_container_width=True):
+                        # Registra o horário atual no campo
                         reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
                         st.session_state.registro_em_edicao = reg
                         campo_atualizado = True
@@ -330,7 +333,7 @@ elif st.session_state.pagina_atual == "Editar":
             reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Início Descarregamento CD"), reg.get("Fim Descarregamento CD"))
             reg["Tempo Total CD"] = calcular_tempo(reg.get("Entrada CD"), reg.get("Saída CD"))
             st.session_state.registro_em_edicao = reg
-            st.rerun()
+            st.rerun()  # Força atualização visual após mudança
 
         st.markdown("---")
 
