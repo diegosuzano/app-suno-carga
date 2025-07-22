@@ -59,7 +59,6 @@ st.markdown("""
         padding: 15px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
-    /* Adiciona um pouco de espaço abaixo dos botões "Agora" para melhor visualização */
     .stButton {
         margin-bottom: 5px;
     }
@@ -98,7 +97,9 @@ def carregar_dataframe(_worksheet):
             if col not in df.columns: df[col] = ''
 
         df = df[COLUNAS_ESPERADAS]
-        df['Data'] = pd.to_datetime(df['Data'], errors='coerce').dt.date
+        # <<< CORREÇÃO 1: Manter a data como string, sem converter para objeto date.
+        # A linha abaixo foi removida:
+        # df['Data'] = pd.to_datetime(df['Data'], errors='coerce').dt.date
         df['df_index'] = df.index
         return df.fillna('')
     except Exception as e:
@@ -192,8 +193,9 @@ if st.session_state.pagina_atual == "Tela Inicial":
     if df.empty:
         st.info("Nenhum registro hoje para calcular as médias.")
     else:
-        hoje = datetime.now(FUSO_HORARIO).date()
-        df_hoje = df[df['Data'] == hoje].copy()
+        # <<< CORREÇÃO 2: Comparar a data como string.
+        hoje_str = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
+        df_hoje = df[df['Data'] == hoje_str].copy()
 
         if df_hoje.empty:
             st.info("Nenhum registro encontrado com a data de hoje.")
@@ -249,11 +251,9 @@ elif st.session_state.pagina_atual == "Novo":
         with st.spinner("Salvando no Google Sheets..."):
             st.session_state.novo_registro_dict['Data'] = datetime.now(FUSO_HORARIO).strftime('%Y-%m-%d')
 
-            # Limpa campos calculados antes de recalcular
             for campo in campos_calculados:
                 st.session_state.novo_registro_dict[campo] = ""
 
-            # Recalcula todos os tempos
             st.session_state.novo_registro_dict['Tempo Espera Doca'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada na Fábrica"), st.session_state.novo_registro_dict.get("Encostou na doca Fábrica"))
             st.session_state.novo_registro_dict['Tempo de Carregamento'] = calcular_tempo(st.session_state.novo_registro_dict.get("Início carregamento"), st.session_state.novo_registro_dict.get("Fim carregamento"))
             st.session_state.novo_registro_dict['Tempo Total'] = calcular_tempo(st.session_state.novo_registro_dict.get("Entrada na Fábrica"), st.session_state.novo_registro_dict.get("Saída do pátio"))
@@ -340,8 +340,8 @@ elif st.session_state.pagina_atual == "Editar":
             with st.spinner("Salvando no Google Sheets..."):
                 registro_para_salvar = st.session_state.registro_em_edicao
 
-                # --- CORREÇÃO 1: CÁLCULO CONDICIONAL ---
-                # Recalcula os tempos apenas se os campos necessários estiverem preenchidos.
+                # A conversão de data não é mais necessária aqui, pois ela já é uma string.
+
                 if registro_para_salvar.get("Entrada na Fábrica") and registro_para_salvar.get("Encostou na doca Fábrica"):
                     registro_para_salvar['Tempo Espera Doca'] = calcular_tempo(registro_para_salvar.get("Entrada na Fábrica"), registro_para_salvar.get("Encostou na doca Fábrica"))
                 if registro_para_salvar.get("Início carregamento") and registro_para_salvar.get("Fim carregamento"):
@@ -359,7 +359,6 @@ elif st.session_state.pagina_atual == "Editar":
 
                 try:
                     gsheet_row_index = reg['df_index'] + 2
-                    # Converte strings vazias e outros "falsy" values para None para limpar a célula no Google Sheets
                     valores_para_salvar = [registro_para_salvar.get(col) if registro_para_salvar.get(col, '') else None for col in COLUNAS_ESPERADAS]
 
                     worksheet.update(f'A{gsheet_row_index}', [valores_para_salvar], value_input_option='USER_ENTERED')
@@ -367,14 +366,12 @@ elif st.session_state.pagina_atual == "Editar":
                     st.session_state.notification = ("success", "Registro atualizado com sucesso!")
                     del st.session_state.registro_em_edicao
                     st.session_state.selectbox_edicao = "Selecione..."
-                    st.rerun() # Força a recarga da página para refletir as mudanças
+                    st.rerun()
                 except Exception as e:
                     st.session_state.notification = ("error", f"Falha ao salvar: {e}")
 
-        # --- CORREÇÃO 2: LÓGICA DE EXIBIÇÃO ---
         for campo in campos_tempo:
             valor_atual = reg.get(campo, '')
-            # Verifica se o valor é uma string não vazia.
             if isinstance(valor_atual, str) and valor_atual.strip():
                 st.success(f"✅ {campo}: {valor_atual}")
             else:
