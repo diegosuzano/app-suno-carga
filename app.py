@@ -10,7 +10,7 @@ NOME_PLANILHA = "Controle de Carga Suzano"
 FUSO_HORARIO = timezone(timedelta(hours=-3))
 HOJE = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
 
-# ORDEM DOS EVENTOS (exatamente como na planilha)
+# ORDEM DOS EVENTOS (exatamente como na sua planilha)
 eventos_fabrica_entrada = [
     "Entrada na Balança Fábrica",
     "Saída balança Fábrica",
@@ -44,13 +44,13 @@ eventos_cd_saida = [
 ]
 
 campos_calculados = [
-    "Tempo de Carregamento",
-    "Tempo Espera Doca",
-    "Tempo Total",
-    "Tempo Percurso Para CD",
-    "Tempo de Descarregamento CD",
-    "Tempo Espera Doca CD",
-    "Tempo Total CD",
+    "Tempo Espera Doca",          # Fábrica: Entrada → Encostou
+    "Tempo de Carregamento",      # Fábrica: Início → Fim
+    "Tempo Total",                # Fábrica: Entrada → Saída do pátio
+    "Tempo Percurso Para CD",     # Saída do pátio → Entrada CD
+    "Tempo Espera Doca CD",       # CD: Entrada CD → Encostou CD
+    "Tempo de Descarregamento CD", # CD: Início → Fim descarga
+    "Tempo Total CD",             # CD: Entrada CD → Saída CD
     "tempo balança fábrica",
     "tempo balança CD"
 ]
@@ -60,10 +60,10 @@ COLUNAS_ESPERADAS = (
     ["Data", "Placa do caminhão", "Nome do conferente"] +
     eventos_fabrica_entrada +
     eventos_fabrica_saida +
-    ["Tempo de Carregamento", "Tempo Espera Doca", "Tempo Total"] +
+    ["Tempo Espera Doca", "Tempo de Carregamento", "Tempo Total"] +
     eventos_cd_entrada +
     eventos_cd_saida +
-    ["Tempo de Descarregamento CD", "Tempo Espera Doca CD", "Tempo Total CD", "Tempo Percurso Para CD"] +
+    ["Tempo Espera Doca CD", "Tempo de Descarregamento CD", "Tempo Total CD", "Tempo Percurso Para CD"] +
     ["tempo balança fábrica", "tempo balança CD"]
 )
 
