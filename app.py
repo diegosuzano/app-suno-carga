@@ -171,45 +171,29 @@ def calcular_tempos(reg):
     reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Fim Descarregamento CD", ""), reg.get("Início Descarregamento CD", ""))
     reg["Tempo Total CD"] = calcular_tempo(reg.get("Saída balança Sair CD", ""), reg.get("Entrada na Balança CD", ""))
 
-    # 🔹 Cálculo de tempo balança Fábrica (só se todos os 4 estiverem preenchidos)
-    balanca_fabrica_campos = [
-        reg.get("Entrada na Fábrica", ""),
-        reg.get("Entrada na Balança Fábrica", "")
-    ]
-    if all(balanca_fabrica_campos):
-        t1 = calcular_tempo(balanca_fabrica_campos[0], balanca_fabrica_campos[1])
-        total_min = 0
-        for t in [t1]:
-            if t and t != "Inválido":
-                try:
-                    h, m = map(int, t.split(":"))
-                    total_min += h * 60 + m
-                except:
-                    continue
-        h, m = divmod(total_min, 60)
-        reg["tempo balança fábrica"] = f"{h:02d}:{m:02d}" if total_min > 0 else ""
-    else:
-        reg["tempo balança fábrica"] = ""
+    # 🔹 Cálculo de tempo balança Fábrica
+    t1 = calcular_tempo(reg.get("Entrada na Fábrica", ""), reg.get("Entrada na Balança Fábrica", ""))
+    total_min = 0
+    if t1 and t1 != "Inválido":
+        try:
+            h, m = map(int, t1.split(":"))
+            total_min = h * 60 + m
+        except:
+            pass
+    h, m = divmod(total_min, 60)
+    reg["tempo balança fábrica"] = f"{h:02d}:{m:02d}" if total_min > 0 else ""
 
-    # 🔹 Cálculo de tempo balança CD (só se todos os 4 estiverem preenchidos)
-    balanca_cd_campos = [
-        reg.get("Saída balança Sair CD", ""),
-        reg.get("Entrada na Balança Sair CD", "")
-    ]
-    if all(balanca_cd_campos):
-        t1 = calcular_tempo(balanca_cd_campos[0], balanca_cd_campos[1])
-        total_min = 0
-        for t in [t1]:
-            if t and t != "Inválido":
-                try:
-                    h, m = map(int, t.split(":"))
-                    total_min += h * 60 + m
-                except:
-                    continue
-        h, m = divmod(total_min, 60)
-        reg["tempo balança CD"] = f"{h:02d}:{m:02d}" if total_min > 0 else ""
-    else:
-        reg["tempo balança CD"] = ""
+    # 🔹 Cálculo de tempo balança CD
+    t1 = calcular_tempo(reg.get("Saída balança Sair CD", ""), reg.get("Entrada na Balança Sair CD", ""))
+    total_min = 0
+    if t1 and t1 != "Inválido":
+        try:
+            h, m = map(int, t1.split(":"))
+            total_min = h * 60 + m
+        except:
+            pass
+    h, m = divmod(total_min, 60)
+    reg["tempo balança CD"] = f"{h:02d}:{m:02d}" if total_min > 0 else ""
 
 def obter_status(registro):
     for campo in reversed(COLUNAS_ESPERADAS[3:]):
@@ -260,7 +244,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
     df = carregar_dados()
     st.markdown("<div class='section-header'>SITUAÇÃO ATUAL</div>", unsafe_allow_html=True)
     if not df.empty:
-        operacao = df[df["Saída CD"] == ""].copy()
+        operacao = df[df["Saída balança Sair CD"] == ""].copy()
         m1, m2, m3 = st.columns(3)
         m1.metric("🚛 Em Operação", len(operacao))
         m2.metric("🏭 Na Fábrica", len(operacao[operacao["Entrada na Balança sair Fábrica"] == ""]))
@@ -363,7 +347,7 @@ elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
     st.markdown("### ✏️ EDITAR REGISTROS")
     df = carregar_dados()
-    incompletos = df[df["Saída CD"] == ""].copy()
+    incompletos = df[df["Saída balança Sair CD"] == ""].copy()
 
     if incompletos.empty:
         st.info("✅ Todos os caminhões estão finalizados.")
@@ -426,17 +410,19 @@ elif st.session_state.pagina_atual == "Editar":
                     st.markdown(f"<span class='etapa-bloqueada'>🔴 {campo} (aguarde etapa anterior)</span>", unsafe_allow_html=True)
 
 # =============================================================================
-# VISUALIZAÇÃO
+# EM OPERAÇÃO
 # =============================================================================
 elif st.session_state.pagina_atual == "Em Operação":
     botao_voltar()
-    st.markdown("<div class='section-header'>🚛 EM OPERAÇÃO</div>", unsafe_allow_html=True)
     df = carregar_dados()
-    st.dataframe(df[df["Saída CD"] == ""], use_container_width=True)
+    st.dataframe(df[df["Saída balança Sair CD"] == ""], use_container_width=True)
 
+# =============================================================================
+# FINALIZADAS
+# =============================================================================
 elif st.session_state.pagina_atual == "Finalizadas":
     botao_voltar()
     df = carregar_dados()
-    st.dataframe(df[df["Saída CD"] != ""], use_container_width=True)
+    st.dataframe(df[df["Saída balança Sair CD"] != ""], use_container_width=True)
 
 # App desenvolvido com Diego de Oliveira - Controle de Carga Suzano
