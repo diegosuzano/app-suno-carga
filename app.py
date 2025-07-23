@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime, timezone, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
-import io
 
 # --- CONFIGURAÇÕES GERAIS ---
 NOME_PLANILHA = "Controle de Carga Suzano"
@@ -192,14 +191,6 @@ def botao_voltar():
                 del st.session_state[key]
         st.rerun()
 
-# Função para converter DataFrame para Excel
-def converter_para_excel(df):
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Dados')
-    buffer.seek(0)
-    return buffer
-
 # Título principal
 st.markdown("<div class='main-header'>🚛 SUZANO - CONTROLE DE CARGA</div>", unsafe_allow_html=True)
 
@@ -294,9 +285,7 @@ elif st.session_state.pagina_atual == "Novo":
     botao_voltar()
     st.markdown("### 🆕 NOVO REGISTRO")
     if 'novo_registro' not in st.session_state:
-        st.session_state.novo_registro = {col: "" for col in COLUNAS_ESPERADAS}
-        st.session_state.novo_registro["Data"] = HOJE
-
+        st.session_state.novo_registro = {"Data": HOJE}
     reg = st.session_state.novo_registro
     reg["Placa do caminhão"] = st.text_input("🚛 Placa", reg.get("Placa do caminhão", ""))
     reg["Nome do conferente"] = st.text_input("👤 Conferente", reg.get("Nome do conferente", ""))
@@ -328,7 +317,6 @@ elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
     st.markdown("### ✏️ EDITAR REGISTROS")
     df = carregar_dados()
-    # ✅ Só mostra caminhões que ainda não finalizaram
     incompletos = df[df["Saída balança Sair CD"] == ""].copy()
 
     if incompletos.empty:
@@ -352,20 +340,21 @@ elif st.session_state.pagina_atual == "Editar":
 
         reg = st.session_state.registro_edit
 
-        st.markdown(f"**📅 Data:** `{reg['Data']}`")
-        st.markdown(f"**🚛 Placa:** `{reg['Placa do caminhão']}`")
-        st.markdown(f"**👤 Conferente:** `{reg['Nome do conferente']}`")
+        st.markdown(f"**Placa do caminhão:** `{reg['Placa do caminhão']}`")
+        st.markdown(f"**Conferente:** `{reg['Nome do conferente']}`")
         st.markdown("---")
         st.markdown("### ⏳ ETAPAS DA OPERAÇÃO")
 
         todos_eventos = eventos_fabrica + eventos_cd
 
         for i, campo in enumerate(todos_eventos):
-            valor_atual = str(reg.get(campo, "")).strip()
+            valor_atual = reg.get(campo, "")
+            valor_str = str(valor_atual).strip()
 
-            if valor_atual and valor_atual not in ["00:00", "00", "0"]:
-                st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor_atual}`</span>", unsafe_allow_html=True)
+            if valor_str and valor_str not in ["00:00", "00", "0"]:
+                st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor_str}`</span>", unsafe_allow_html=True)
             else:
+                # Verifica se o campo anterior foi preenchido
                 anterior_ok = (i == 0) or (
                     i > 0 and
                     str(reg.get(todos_eventos[i-1], "")).strip() and
@@ -373,7 +362,8 @@ elif st.session_state.pagina_atual == "Editar":
                 )
 
                 if anterior_ok:
-                    if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}_{datetime.now().timestamp()}"):
+                    if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}"):
+                        # Registra o horário atual
                         reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
                         calcular_tempos(reg)
                         try:
@@ -381,8 +371,8 @@ elif st.session_state.pagina_atual == "Editar":
                             valores = [reg.get(col, "") or None for col in COLUNAS_ESPERADAS]
                             worksheet.update(f"A{row_idx}", [valores], value_input_option='USER_ENTERED')
                             st.cache_data.clear()
-                            st.success(f"✅ {campo} atualizado!")
-                            # ✅ Fecha o modo "Editar" e volta ao menu
+                            st.success(f"✅ {campo} atualizado com sucesso!")
+                            # Volta ao menu
                             st.session_state.pagina_atual = "Tela Inicial"
                             if "registro_edit" in st.session_state:
                                 del st.session_state.registro_edit
@@ -395,16 +385,13 @@ elif st.session_state.pagina_atual == "Editar":
                     st.markdown(f"<span class='etapa-bloqueada'>🔴 {campo} (aguarde etapa anterior)</span>", unsafe_allow_html=True)
 
 # =============================================================================
-# EM OPERAÇÃO
+# VISUALIZAÇÃO
 # =============================================================================
 elif st.session_state.pagina_atual == "Em Operação":
     botao_voltar()
     df = carregar_dados()
     st.dataframe(df[df["Saída balança Sair CD"] == ""], use_container_width=True)
 
-# =============================================================================
-# FINALIZADAS
-# =============================================================================
 elif st.session_state.pagina_atual == "Finalizadas":
     botao_voltar()
     df = carregar_dados()
