@@ -127,8 +127,8 @@ with col2:
 def connect_to_google_sheets():
     try:
         scopes = [
-            "https://www.googleapis.com/auth/spreadsheets ",
-            "https://www.googleapis.com/auth/drive "
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
         ]
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
@@ -186,45 +186,51 @@ def calcular_tempos(reg):
     reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Início Descarregamento CD", ""), reg.get("Fim Descarregamento CD", ""))
     reg["Tempo Total CD"] = calcular_tempo(reg.get("Entrada CD", ""), reg.get("Saída CD", ""))
 
-    # 🔹 Cálculo de tempo balança Fábrica (com validação)
-    entrada1 = reg.get("Entrada na Balança Fábrica", "")
-    saida1 = reg.get("Saída balança Fábrica", "")
-    entrada2 = reg.get("Entrada na Balança sair Fábrica", "")
-    saida2 = reg.get("Saída balança sair Fábrica", "")
+    # 🔹 Cálculo de tempo balança Fábrica (só se todos os 4 estiverem preenchidos)
+    balanca_fabrica_campos = [
+        reg.get("Entrada na Balança Fábrica", ""),
+        reg.get("Saída balança Fábrica", ""),
+        reg.get("Entrada na Balança sair Fábrica", ""),
+        reg.get("Saída balança sair Fábrica", "")
+    ]
+    if all(balanca_fabrica_campos):
+        t1 = calcular_tempo(balanca_fabrica_campos[0], balanca_fabrica_campos[1])
+        t2 = calcular_tempo(balanca_fabrica_campos[2], balanca_fabrica_campos[3])
+        total_min = 0
+        for t in [t1, t2]:
+            if t and t != "Inválido":
+                try:
+                    h, m = map(int, t.split(":"))
+                    total_min += h * 60 + m
+                except:
+                    continue
+        h, m = divmod(total_min, 60)
+        reg["tempo balança fábrica"] = f"{h:02d}:{m:02d}" if total_min > 0 else ""
+    else:
+        reg["tempo balança fábrica"] = ""
 
-    tempo1 = calcular_tempo(saida1, entrada1) if entrada1 and saida1 else ""
-    tempo2 = calcular_tempo(saida2, entrada2) if entrada2 and saida2 else ""
-
-    total_minutos = 0
-    for t in [tempo1, tempo2]:
-        if t and t != "Inválido":
-            try:
-                h, m = map(int, t.split(":"))
-                total_minutos += h * 60 + m
-            except:
-                continue
-    h, m = divmod(total_minutos, 60)
-    reg["tempo balança fábrica"] = f"{h:02d}:{m:02d}" if total_minutos > 0 else ""
-
-    # 🔹 Cálculo de tempo balança CD (com validação)
-    entrada1_cd = reg.get("Entrada na Balança CD", "")
-    saida1_cd = reg.get("Saída balança CD", "")
-    entrada2_cd = reg.get("Entrada na Balança Sair CD", "")
-    saida2_cd = reg.get("Saída balança Sair CD", "")
-
-    tempo1_cd = calcular_tempo(saida1_cd, entrada1_cd) if entrada1_cd and saida1_cd else ""
-    tempo2_cd = calcular_tempo(saida2_cd, entrada2_cd) if entrada2_cd and saida2_cd else ""
-
-    total_minutos_cd = 0
-    for t in [tempo1_cd, tempo2_cd]:
-        if t and t != "Inválido":
-            try:
-                h, m = map(int, t.split(":"))
-                total_minutos_cd += h * 60 + m
-            except:
-                continue
-    h, m = divmod(total_minutos_cd, 60)
-    reg["tempo balança CD"] = f"{h:02d}:{m:02d}" if total_minutos_cd > 0 else ""
+    # 🔹 Cálculo de tempo balança CD (só se todos os 4 estiverem preenchidos)
+    balanca_cd_campos = [
+        reg.get("Entrada na Balança CD", ""),
+        reg.get("Saída balança CD", ""),
+        reg.get("Entrada na Balança Sair CD", ""),
+        reg.get("Saída balança Sair CD", "")
+    ]
+    if all(balanca_cd_campos):
+        t1 = calcular_tempo(balanca_cd_campos[0], balanca_cd_campos[1])
+        t2 = calcular_tempo(balanca_cd_campos[2], balanca_cd_campos[3])
+        total_min = 0
+        for t in [t1, t2]:
+            if t and t != "Inválido":
+                try:
+                    h, m = map(int, t.split(":"))
+                    total_min += h * 60 + m
+                except:
+                    continue
+        h, m = divmod(total_min, 60)
+        reg["tempo balança CD"] = f"{h:02d}:{m:02d}" if total_min > 0 else ""
+    else:
+        reg["tempo balança CD"] = ""
 
 def obter_status(registro):
     for campo in reversed(COLUNAS_ESPERADAS[3:]):
@@ -378,7 +384,7 @@ elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
     st.markdown("### ✏️ EDITAR REGISTROS")
     df = carregar_dados()
-    incompletos = df[df["Saída balança Sair CD"] == ""].copy()  # Agora vai até o final
+    incompletos = df[df["Saída balança Sair CD"] == ""].copy()
 
     if incompletos.empty:
         st.info("✅ Todos os caminhões estão finalizados.")
@@ -443,16 +449,68 @@ elif st.session_state.pagina_atual == "Editar":
                     st.markdown(f"<span class='etapa-bloqueada'>🔴 {campo} (aguarde etapa anterior)</span>", unsafe_allow_html=True)
 
 # =============================================================================
-# VISUALIZAÇÃO
+# EM OPERAÇÃO (versão visual)
 # =============================================================================
 elif st.session_state.pagina_atual == "Em Operação":
     botao_voltar()
+    st.markdown("<div class='section-header'>🚛 EM OPERAÇÃO</div>", unsafe_allow_html=True)
     df = carregar_dados()
-    st.dataframe(df[df["Saída CD"] == ""], use_container_width=True)
+    operacao = df[df["Saída balança Sair CD"] == ""].copy()
 
+    if operacao.empty:
+        st.info("✅ Não há caminhões em operação.")
+    else:
+        # --- DASHBOARD: Fábrica e CD ---
+        st.markdown("#### 🏭 OPERAÇÃO FÁBRICA")
+        fabrica = operacao[operacao["Saída do pátio"] == ""].copy()
+        if not fabrica.empty:
+            for _, row in fabrica.iterrows():
+                ultima_etapa = obter_status(row)
+                horario = row[ultima_etapa] if ultima_etapa != "Não iniciado" else ""
+                st.markdown(f"""
+                <div style='background:#f0f8ff; padding:10px; border-radius:8px; margin:5px 0; border-left: 4px solid #3b82f6;'>
+                    <b>🚛 {row['Placa do caminhão']}</b><br>
+                    {ultima_etapa} — <span style='color:#059669'>{horario}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='color:#9ca3af; font-style:italic;'>Nenhum caminhão na fábrica</div>", unsafe_allow_html=True)
+
+        st.markdown("#### 📦 OPERAÇÃO CD")
+        cd = operacao[operacao["Saída do pátio"] != ""].copy()
+        if not cd.empty:
+            for _, row in cd.iterrows():
+                ultima_etapa = obter_status(row)
+                horario = row[ultima_etapa] if ultima_etapa != "Não iniciado" else ""
+                st.markdown(f"""
+                <div style='background:#f0fff0; padding:10px; border-radius:8px; margin:5px 0; border-left: 4px solid #10b981;'>
+                    <b>🚛 {row['Placa do caminhão']}</b><br>
+                    {ultima_etapa} — <span style='color:#059669'>{horario}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='color:#9ca3af; font-style:italic;'>Nenhum caminhão no CD</div>", unsafe_allow_html=True)
+
+        # --- TABELA COMPLETA DO FLUXO ---
+        st.markdown("#### 📋 FLUXO COMPLETO DOS CAMINHÕES")
+        cols_exibidas = [
+            "Placa do caminhão", "Entrada na Balança Fábrica", "Saída balança Fábrica",
+            "Entrada na Fábrica", "Encostou na doca Fábrica", "Início carregamento",
+            "Fim carregamento", "Saída do pátio", "Entrada na Balança sair Fábrica", "Saída balança sair Fábrica",
+            "Entrada na Balança CD", "Saída balança CD", "Entrada CD", "Encostou na doca CD",
+            "Início Descarregamento CD", "Fim Descarregamento CD", "Saída CD",
+            "Entrada na Balança Sair CD", "Saída balança Sair CD"
+        ]
+        df_exibicao = operacao[cols_exibidas].copy()
+        df_exibicao = df_exibicao.rename(columns={"Placa do caminhão": "Placa"})
+        st.dataframe(df_exibicao, use_container_width=True)
+
+# =============================================================================
+# FINALIZADAS
+# =============================================================================
 elif st.session_state.pagina_atual == "Finalizadas":
     botao_voltar()
     df = carregar_dados()
-    st.dataframe(df[df["Saída CD"] != ""], use_container_width=True)
+    st.dataframe(df[df["Saída balança Sair CD"] != ""], use_container_width=True)
 
 # App desenvolvido com Diego de Oliveira - Controle de Carga Suzano
