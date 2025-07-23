@@ -44,13 +44,13 @@ eventos_cd_saida = [
 ]
 
 campos_calculados = [
-    "Tempo Espera Doca",          # Fábrica: Entrada → Encostou
-    "Tempo de Carregamento",      # Fábrica: Início → Fim
-    "Tempo Total",                # Fábrica: Entrada → Saída do pátio
-    "Tempo Percurso Para CD",     # Saída do pátio → Entrada CD
-    "Tempo Espera Doca CD",       # CD: Entrada CD → Encostou CD
-    "Tempo de Descarregamento CD", # CD: Início → Fim descarga
-    "Tempo Total CD",             # CD: Entrada CD → Saída CD
+    "Tempo Espera Doca",
+    "Tempo de Carregamento",
+    "Tempo Total",
+    "Tempo Percurso Para CD",
+    "Tempo Espera Doca CD",
+    "Tempo de Descarregamento CD",
+    "Tempo Total CD",
     "tempo balança fábrica",
     "tempo balança CD"
 ]
@@ -185,11 +185,46 @@ def calcular_tempos(reg):
     reg["Tempo Espera Doca CD"] = calcular_tempo(reg.get("Entrada CD", ""), reg.get("Encostou na doca CD", ""))
     reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Início Descarregamento CD", ""), reg.get("Fim Descarregamento CD", ""))
     reg["Tempo Total CD"] = calcular_tempo(reg.get("Entrada CD", ""), reg.get("Saída CD", ""))
-    # Tempo de balança
-    reg["tempo balança fábrica"] = calcular_tempo(reg.get("Saída balança Fábrica", ""), reg.get("Entrada na Balança Fábrica", ""))
-    reg["tempo balança fábrica"] += calcular_tempo(reg.get("Saída balança sair Fábrica", ""), reg.get("Entrada na Balança sair Fábrica", ""))
-    reg["tempo balança CD"] = calcular_tempo(reg.get("Saída balança CD", ""), reg.get("Entrada na Balança CD", ""))
-    reg["tempo balança CD"] += calcular_tempo(reg.get("Saída balança Sair CD", ""), reg.get("Entrada na Balança Sair CD", ""))
+
+    # 🔹 Cálculo de tempo balança Fábrica (com validação)
+    entrada1 = reg.get("Entrada na Balança Fábrica", "")
+    saida1 = reg.get("Saída balança Fábrica", "")
+    entrada2 = reg.get("Entrada na Balança sair Fábrica", "")
+    saida2 = reg.get("Saída balança sair Fábrica", "")
+
+    tempo1 = calcular_tempo(saida1, entrada1) if entrada1 and saida1 else ""
+    tempo2 = calcular_tempo(saida2, entrada2) if entrada2 and saida2 else ""
+
+    total_minutos = 0
+    for t in [tempo1, tempo2]:
+        if t and t != "Inválido":
+            try:
+                h, m = map(int, t.split(":"))
+                total_minutos += h * 60 + m
+            except:
+                continue
+    h, m = divmod(total_minutos, 60)
+    reg["tempo balança fábrica"] = f"{h:02d}:{m:02d}" if total_minutos > 0 else ""
+
+    # 🔹 Cálculo de tempo balança CD (com validação)
+    entrada1_cd = reg.get("Entrada na Balança CD", "")
+    saida1_cd = reg.get("Saída balança CD", "")
+    entrada2_cd = reg.get("Entrada na Balança Sair CD", "")
+    saida2_cd = reg.get("Saída balança Sair CD", "")
+
+    tempo1_cd = calcular_tempo(saida1_cd, entrada1_cd) if entrada1_cd and saida1_cd else ""
+    tempo2_cd = calcular_tempo(saida2_cd, entrada2_cd) if entrada2_cd and saida2_cd else ""
+
+    total_minutos_cd = 0
+    for t in [tempo1_cd, tempo2_cd]:
+        if t and t != "Inválido":
+            try:
+                h, m = map(int, t.split(":"))
+                total_minutos_cd += h * 60 + m
+            except:
+                continue
+    h, m = divmod(total_minutos_cd, 60)
+    reg["tempo balança CD"] = f"{h:02d}:{m:02d}" if total_minutos_cd > 0 else ""
 
 def obter_status(registro):
     for campo in reversed(COLUNAS_ESPERADAS[3:]):
@@ -343,10 +378,10 @@ elif st.session_state.pagina_atual == "Editar":
     botao_voltar()
     st.markdown("### ✏️ EDITAR REGISTROS")
     df = carregar_dados()
-    incompletos = df[df["Saída CD"] == ""].copy()
+    incompletos = df[df["Saída balança Sair CD"] == ""].copy()  # Agora vai até o final
 
     if incompletos.empty:
-        st.info("✅ Não há registros em andamento para editar.")
+        st.info("✅ Todos os caminhões estão finalizados.")
         st.stop()
 
     opcoes = {
@@ -372,24 +407,27 @@ elif st.session_state.pagina_atual == "Editar":
         st.markdown("---")
         st.markdown("### ⏳ ETAPAS DA OPERAÇÃO")
 
-        todos_campos = [col for col in COLUNAS_ESPERADAS if col not in ["Data", "Placa do caminhão", "Nome do conferente"] + campos_calculados]
+        todos_eventos = (
+            eventos_fabrica_entrada +
+            eventos_fabrica_saida +
+            eventos_cd_entrada +
+            eventos_cd_saida
+        )
 
-        for campo in todos_campos:
+        for i, campo in enumerate(todos_eventos):
             valor_atual = str(reg.get(campo, "")).strip()
 
             if valor_atual and valor_atual not in ["00:00", "00", "0"]:
                 st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor_atual}`</span>", unsafe_allow_html=True)
             else:
-                # Verifica se o anterior foi preenchido
-                indice = todos_campos.index(campo)
-                anterior_ok = True
-                if indice > 0:
-                    campo_anterior = todos_campos[indice - 1]
-                    valor_anterior = str(reg.get(campo_anterior, "")).strip()
-                    anterior_ok = bool(valor_anterior and valor_anterior not in ["00:00", "00", "0"])
+                anterior_ok = (i == 0) or (
+                    i > 0 and
+                    str(reg.get(todos_eventos[i-1], "")).strip() and
+                    reg.get(todos_eventos[i-1]) not in ["00:00", "00", "0"]
+                )
 
                 if anterior_ok:
-                    if st.button(f"⏰ Registrar {campo}", key=f"edit_{idx}_{campo}"):
+                    if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}"):
                         reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
                         calcular_tempos(reg)
                         try:
