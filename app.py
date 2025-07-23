@@ -111,6 +111,7 @@ with col2:
 @st.cache_resource
 def connect_to_google_sheets():
     try:
+        # ✅ CORRIGIDO: Removidos espaços extras nas URLs
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
@@ -381,7 +382,7 @@ elif st.session_state.pagina_atual == "Editar":
                             worksheet.update(f"A{row_idx}", [valores], value_input_option='USER_ENTERED')
                             st.cache_data.clear()
                             st.success(f"✅ {campo} atualizado!")
-                            st.rerun()  # ✅ Fica no modo "Editar"
+                            st.rerun()
                         except Exception as e:
                             st.error(f"❌ Erro ao salvar: {e}")
                 else:
