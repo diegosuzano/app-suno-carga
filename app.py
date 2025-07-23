@@ -36,8 +36,8 @@ eventos_cd = [
 campos_tempo = eventos_fabrica + eventos_cd
 
 campos_calculados = [
-    "Tempo de Carregamento",
     "Tempo Espera Doca",
+    "Tempo de Carregamento",
     "Tempo Total",
     "Tempo Percurso Para CD",
     "Tempo Espera Doca CD",
@@ -59,12 +59,12 @@ if 'pagina_atual' not in st.session_state:
 if 'modo_escuro' not in st.session_state:
     st.session_state.modo_escuro = False
 
-# --- ESTILO ---
+# --- ESTILO (modo escuro) ---
 def aplicar_estilo():
     cor_fundo = "#1e1e1e" if st.session_state.modo_escuro else "#f8fafc"
     cor_texto = "white" if st.session_state.modo_escuro else "#1f4e79"
     cor_card = "#2d2d2d" if st.session_state.modo_escuro else "white"
-    borda_card = "#404040" if st.session.modo_escuro else "#e0e0e0"
+    borda_card = "#404040" if st.session_state.modo_escuro else "#e0e0e0"
     st.markdown(f"""
     <style>
         .main {{ background-color: {cor_fundo}; color: {cor_texto}; }}
@@ -396,3 +396,5 @@ elif st.session_state.pagina_atual == "Finalizadas":
     botao_voltar()
     df = carregar_dados()
     st.dataframe(df[df["Saída CD"] != ""], use_container_width=True)
+
+# App desenvolvido com Diego de Oliveira - Controle de Carga Suzano
