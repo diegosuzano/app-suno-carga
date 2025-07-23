@@ -394,7 +394,7 @@ elif st.session_state.pagina_atual == "Editar":
                 )
 
                 if anterior_ok:
-                    if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}"):
+                    if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}_{datetime.now().timestamp()}"):
                         reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
                         calcular_tempos(reg)
                         try:
@@ -403,6 +403,12 @@ elif st.session_state.pagina_atual == "Editar":
                             worksheet.update(f"A{row_idx}", [valores], value_input_option='USER_ENTERED')
                             st.cache_data.clear()
                             st.success(f"✅ {campo} atualizado!")
+                            # ✅ Fecha o modo "Editar" e volta ao menu
+                            st.session_state.pagina_atual = "Tela Inicial"
+                            if "registro_edit" in st.session_state:
+                                del st.session_state.registro_edit
+                            if "idx_edit" in st.session_state:
+                                del st.session_state.idx_edit
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Erro ao salvar: {e}")
