@@ -10,8 +10,8 @@ NOME_PLANILHA = "Controle de Carga Suzano"
 FUSO_HORARIO = timezone(timedelta(hours=-3))
 HOJE = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d")
 
-# ORDEM DOS EVENTOS
-eventos_fabrica = [
+# ORDEM DOS EVENTOS (exatamente como na planilha)
+eventos_fabrica_entrada = [
     "Entrada na Balança Fábrica",
     "Saída balança Fábrica",
     "Entrada na Fábrica",
@@ -23,7 +23,12 @@ eventos_fabrica = [
     "Saída do pátio"
 ]
 
-eventos_cd = [
+eventos_fabrica_saida = [
+    "Entrada na Balança sair Fábrica",
+    "Saída balança sair Fábrica"
+]
+
+eventos_cd_entrada = [
     "Entrada na Balança CD",
     "Saída balança CD",
     "Entrada CD",
@@ -33,24 +38,33 @@ eventos_cd = [
     "Saída CD"
 ]
 
-campos_tempo = eventos_fabrica + eventos_cd
-
-campos_calculados = [
-    "Tempo Espera Doca",
-    "Tempo de Carregamento",
-    "Tempo Total",
-    "Tempo Percurso Para CD",
-    "Tempo Espera Doca CD",
-    "Tempo de Descarregamento CD",
-    "Tempo Total CD"
+eventos_cd_saida = [
+    "Entrada na Balança Sair CD",
+    "Saída balança Sair CD"
 ]
 
-# ORDEM COMPLETA DAS COLUNAS (IGUAL À SUA PLANILHA)
+campos_calculados = [
+    "Tempo de Carregamento",
+    "Tempo Espera Doca",
+    "Tempo Total",
+    "Tempo Percurso Para CD",
+    "Tempo de Descarregamento CD",
+    "Tempo Espera Doca CD",
+    "Tempo Total CD",
+    "tempo balança fábrica",
+    "tempo balança CD"
+]
+
+# ORDEM FINAL DAS COLUNAS (IGUAL À SUA PLANILHA)
 COLUNAS_ESPERADAS = (
     ["Data", "Placa do caminhão", "Nome do conferente"] +
-    eventos_fabrica +
-    eventos_cd +
-    campos_calculados
+    eventos_fabrica_entrada +
+    eventos_fabrica_saida +
+    ["Tempo de Carregamento", "Tempo Espera Doca", "Tempo Total"] +
+    eventos_cd_entrada +
+    eventos_cd_saida +
+    ["Tempo de Descarregamento CD", "Tempo Espera Doca CD", "Tempo Total CD", "Tempo Percurso Para CD"] +
+    ["tempo balança fábrica", "tempo balança CD"]
 )
 
 # --- INICIALIZAÇÃO DO ESTADO ---
@@ -171,9 +185,14 @@ def calcular_tempos(reg):
     reg["Tempo Espera Doca CD"] = calcular_tempo(reg.get("Entrada CD", ""), reg.get("Encostou na doca CD", ""))
     reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Início Descarregamento CD", ""), reg.get("Fim Descarregamento CD", ""))
     reg["Tempo Total CD"] = calcular_tempo(reg.get("Entrada CD", ""), reg.get("Saída CD", ""))
+    # Tempo de balança
+    reg["tempo balança fábrica"] = calcular_tempo(reg.get("Saída balança Fábrica", ""), reg.get("Entrada na Balança Fábrica", ""))
+    reg["tempo balança fábrica"] += calcular_tempo(reg.get("Saída balança sair Fábrica", ""), reg.get("Entrada na Balança sair Fábrica", ""))
+    reg["tempo balança CD"] = calcular_tempo(reg.get("Saída balança CD", ""), reg.get("Entrada na Balança CD", ""))
+    reg["tempo balança CD"] += calcular_tempo(reg.get("Saída balança Sair CD", ""), reg.get("Entrada na Balança Sair CD", ""))
 
 def obter_status(registro):
-    for campo in reversed(campos_tempo):
+    for campo in reversed(COLUNAS_ESPERADAS[3:]):
         valor = str(registro.get(campo, "")).strip()
         if valor and valor not in ["00:00", "00", "0"]:
             return campo
@@ -227,7 +246,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
         m2.metric("🏭 Na Fábrica", len(operacao[operacao["Saída do pátio"] == ""]))
         m3.metric("📦 No CD / Rota", len(operacao) - len(operacao[operacao["Saída do pátio"] == ""]))
 
-    # --- MÉDIAS DO DIA (organizado por Fábrica e CD) ---
+    # --- MÉDIAS DO DIA ---
     st.markdown("<div class='section-header'>📊 MÉDIAS DO DIA</div>", unsafe_allow_html=True)
     df_hoje = df[df["Data"] == HOJE].copy()
 
@@ -268,6 +287,10 @@ if st.session_state.pagina_atual == "Tela Inicial":
         col7, _, _ = st.columns(3)
         col7.metric("🛣️ Tempo Percurso Para CD", medias["Tempo Percurso Para CD"])
 
+        col8, col9 = st.columns(2)
+        col8.metric("⚖️ Tempo Balança Fábrica", medias["tempo balança fábrica"])
+        col9.metric("⚖️ Tempo Balança CD", medias["tempo balança CD"])
+
     # --- BAIXAR COMO EXCEL ---
     st.markdown("<div class='section-header'>📥 BAIXAR PLANILHA</div>", unsafe_allow_html=True)
     excel_data = converter_para_excel(df)
@@ -280,7 +303,7 @@ if st.session_state.pagina_atual == "Tela Inicial":
     )
 
 # =============================================================================
-# NOVO REGISTRO
+# NOVO REGISTRO (só permite o primeiro evento)
 # =============================================================================
 elif st.session_state.pagina_atual == "Novo":
     botao_voltar()
@@ -295,31 +318,23 @@ elif st.session_state.pagina_atual == "Novo":
     st.markdown("---")
     st.markdown("### ⏳ ETAPAS DA OPERAÇÃO")
 
-    for i, campo in enumerate(campos_tempo):
-        valor_atual = str(reg.get(campo, "")).strip()
+    campo = "Entrada na Balança Fábrica"
+    valor = str(reg.get(campo, "")).strip()
 
-        if valor_atual and valor_atual not in ["00:00", "00", "0"]:
-            st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor_atual}`</span>", unsafe_allow_html=True)
-        else:
-            anterior_ok = (i == 0) or (
-                i > 0 and
-                str(reg.get(campos_tempo[i-1], "")).strip() and
-                reg.get(campos_tempo[i-1]) not in ["00:00", "00", "0"]
-            )
+    if valor and valor not in ["00:00", "00", "0"]:
+        st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor}`</span>", unsafe_allow_html=True)
+    else:
+        if st.button(f"⏰ Registrar {campo}", key=f"btn_{campo}", use_container_width=True):
+            reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                worksheet.append_row([reg.get(col, "") or None for col in COLUNAS_ESPERADAS], value_input_option='USER_ENTERED')
+                st.cache_data.clear()
+                st.success(f"✅ {campo} registrado! Edite para continuar.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Falha ao salvar: {e}")
 
-            if anterior_ok:
-                if st.button(f"⏰ Registrar {campo}", key=f"btn_{i}_{campo}", use_container_width=True):
-                    reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
-                    calcular_tempos(reg)
-                    try:
-                        worksheet.append_row([reg.get(col, "") or None for col in COLUNAS_ESPERADAS], value_input_option='USER_ENTERED')
-                        st.cache_data.clear()
-                        st.success(f"✅ {campo} registrado!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Falha ao salvar: {e}")
-            else:
-                st.markdown(f"<span class='etapa-bloqueada'>🔴 {campo} (aguarde etapa anterior)</span>", unsafe_allow_html=True)
+    st.info("ℹ️ Os demais eventos devem ser registrados no modo **Editar**.")
 
 # =============================================================================
 # EDITAR REGISTRO
@@ -357,19 +372,24 @@ elif st.session_state.pagina_atual == "Editar":
         st.markdown("---")
         st.markdown("### ⏳ ETAPAS DA OPERAÇÃO")
 
-        for i, campo in enumerate(campos_tempo):
+        todos_campos = [col for col in COLUNAS_ESPERADAS if col not in ["Data", "Placa do caminhão", "Nome do conferente"] + campos_calculados]
+
+        for campo in todos_campos:
             valor_atual = str(reg.get(campo, "")).strip()
 
             if valor_atual and valor_atual not in ["00:00", "00", "0"]:
                 st.markdown(f"<span class='etapa-concluida'>✅ {campo}: `{valor_atual}`</span>", unsafe_allow_html=True)
             else:
+                # Verifica se o anterior foi preenchido
+                indice = todos_campos.index(campo)
                 anterior_ok = True
-                if i > 0:
-                    anterior = str(reg.get(campos_tempo[i-1], "")).strip()
-                    anterior_ok = bool(anterior and anterior not in ["00:00", "00", "0"])
+                if indice > 0:
+                    campo_anterior = todos_campos[indice - 1]
+                    valor_anterior = str(reg.get(campo_anterior, "")).strip()
+                    anterior_ok = bool(valor_anterior and valor_anterior not in ["00:00", "00", "0"])
 
                 if anterior_ok:
-                    if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}"):
+                    if st.button(f"⏰ Registrar {campo}", key=f"edit_{idx}_{campo}"):
                         reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
                         calcular_tempos(reg)
                         try:
