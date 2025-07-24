@@ -158,23 +158,91 @@ def calcular_tempo(inicio, fim):
         return ""
 
 def calcular_tempos(reg):
-    # 🔹 Somente calcula se o campo final foi registrado
-    if not reg.get("Saída balança Sair CD", "").strip():
-        # Se ainda não finalizou, todos os campos de tempo ficam vazios
-        for campo in campos_calculados:
-            reg[campo] = ""
-        return
+    # Função auxiliar para verificar se o valor é válido
+    def is_valid_time(value):
+        return bool(value) and value not in ["00:00", "00", "0"]
 
-    # Agora sim, calcula tudo com base no registro completo
-    reg["Tempo de Carregamento"] = calcular_tempo(reg.get("Fim carregamento", ""), reg.get("Início carregamento", ""))
-    reg["Tempo Espera Doca"] = calcular_tempo(reg.get("Encostou na doca Fábrica", ""), reg.get("Entrada na Fábrica", ""))
-    reg["Tempo Total"] = calcular_tempo(reg.get("Saída balança Sair CD", ""), reg.get("Entrada na Balança Fábrica", ""))
-    reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Fim Descarregamento CD", ""), reg.get("Início Descarregamento CD", ""))
-    reg["Tempo Espera Doca CD"] = calcular_tempo(reg.get("Encostou na doca CD", ""), reg.get("Entrada CD", ""))
-    reg["Tempo Total CD"] = calcular_tempo(reg.get("Saída balança Sair CD", ""), reg.get("Entrada na Balança CD", ""))
-    reg["Tempo Percurso Para CD"] = calcular_tempo(reg.get("Entrada na Balança CD", ""), reg.get("Saída balança sair Fábrica", ""))
-    reg["tempo balança fábrica"] = calcular_tempo(reg.get("Entrada na Fábrica", ""), reg.get("Entrada na Balança Fábrica", ""))
-    reg["tempo balança CD"] = calcular_tempo(reg.get("Entrada CD", ""), reg.get("Entrada na Balança CD", ""))
+    # Fábrica
+    if is_valid_time(reg.get("Encostou na doca Fábrica", "")) and is_valid_time(reg.get("Entrada na Fábrica", "")):
+        reg["Tempo Espera Doca"] = calcular_tempo(
+            reg.get("Encostou na doca Fábrica", ""),
+            reg.get("Entrada na Fábrica", "")
+        )
+    else:
+        reg["Tempo Espera Doca"] = ""
+
+    if is_valid_time(reg.get("Fim carregamento", "")) and is_valid_time(reg.get("Início carregamento", "")):
+        reg["Tempo de Carregamento"] = calcular_tempo(
+            reg.get("Fim carregamento", ""),
+            reg.get("Início carregamento", "")
+        )
+    else:
+        reg["Tempo de Carregamento"] = ""
+
+    # CD
+    if is_valid_time(reg.get("Encostou na doca CD", "")) and is_valid_time(reg.get("Entrada CD", "")):
+        reg["Tempo Espera Doca CD"] = calcular_tempo(
+            reg.get("Encostou na doca CD", ""),
+            reg.get("Entrada CD", "")
+        )
+    else:
+        reg["Tempo Espera Doca CD"] = ""
+
+    if is_valid_time(reg.get("Fim Descarregamento CD", "")) and is_valid_time(reg.get("Início Descarregamento CD", "")):
+        reg["Tempo de Descarregamento CD"] = calcular_tempo(
+            reg.get("Fim Descarregamento CD", ""),
+            reg.get("Início Descarregamento CD", "")
+        )
+    else:
+        reg["Tempo de Descarregamento CD"] = ""
+
+    # Rota
+    if is_valid_time(reg.get("Entrada na Balança CD", "")) and is_valid_time(reg.get("Saída balança sair Fábrica", "")):
+        reg["Tempo Percurso Para CD"] = calcular_tempo(
+            reg.get("Entrada na Balança CD", ""),
+            reg.get("Saída balança sair Fábrica", "")
+        )
+    else:
+        reg["Tempo Percurso Para CD"] = ""
+
+    # Tempo Balança Fábrica
+    if is_valid_time(reg.get("Entrada na Fábrica", "")) and is_valid_time(reg.get("Entrada na Balança Fábrica", "")):
+        reg["tempo balança fábrica"] = calcular_tempo(
+            reg.get("Entrada na Fábrica", ""),
+            reg.get("Entrada na Balança Fábrica", "")
+        )
+    else:
+        reg["tempo balança fábrica"] = ""
+
+    # Tempo Balança CD
+    if is_valid_time(reg.get("Entrada CD", "")) and is_valid_time(reg.get("Entrada na Balança CD", "")):
+        reg["tempo balança CD"] = calcular_tempo(
+            reg.get("Entrada CD", ""),
+            reg.get("Entrada na Balança CD", "")
+        )
+    else:
+        reg["tempo balança CD"] = ""
+
+    # Tempo Total e Tempo Total CD (só calculados se Saída balança Sair CD estiver preenchido)
+    if is_valid_time(reg.get("Saída balança Sair CD", "")):
+        if is_valid_time(reg.get("Entrada na Balança Fábrica", "")):
+            reg["Tempo Total"] = calcular_tempo(
+                reg.get("Saída balança Sair CD", ""),
+                reg.get("Entrada na Balança Fábrica", "")
+            )
+        else:
+            reg["Tempo Total"] = ""
+
+        if is_valid_time(reg.get("Entrada na Balança CD", "")):
+            reg["Tempo Total CD"] = calcular_tempo(
+                reg.get("Saída balança Sair CD", ""),
+                reg.get("Entrada na Balança CD", "")
+            )
+        else:
+            reg["Tempo Total CD"] = ""
+    else:
+        reg["Tempo Total"] = ""
+        reg["Tempo Total CD"] = ""
 
 def obter_status(registro):
     for campo in reversed(COLUNAS_ESPERADAS[3:]):
@@ -358,9 +426,7 @@ elif st.session_state.pagina_atual == "Editar":
                 if anterior_ok:
                     if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}"):
                         reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
-                        # 🔹 Só calcula os tempos SE o campo for "Saída balança Sair CD"
-                        if campo == "Saída balança Sair CD":
-                            calcular_tempos(reg)
+                        calcular_tempos(reg)
                         try:
                             row_idx = idx + 2
                             valores = [reg.get(col, "") or None for col in COLUNAS_ESPERADAS]
@@ -374,7 +440,7 @@ elif st.session_state.pagina_atual == "Editar":
                     st.markdown(f"<span class='etapa-bloqueada'>🔴 {campo} (aguarde etapa anterior)</span>", unsafe_allow_html=True)
 
 # =============================================================================
-# EM OPERAÇÃO (com nova visualização detalhada)
+# EM OPERAÇÃO
 # =============================================================================
 elif st.session_state.pagina_atual == "Em Operação":
     botao_voltar()
@@ -395,7 +461,8 @@ elif st.session_state.pagina_atual == "Em Operação":
         if not df_fabrica.empty:
             for _, row in df_fabrica.iterrows():
                 status = obter_status(row)
-                st.markdown(f"<span class='etapa-concluida'>🚛 `{row['Placa do caminhão']}` | {status}</span>", unsafe_allow_html=True)
+                ultima_hora = row.get(status, "")
+                st.markdown(f"<span class='etapa-concluida'>🚛 `{row['Placa do caminhão']}` | {status} ({ultima_hora})</span>", unsafe_allow_html=True)
         else:
             st.markdown("<span class='etapa-bloqueada'>Nenhum caminhão na fábrica.</span>", unsafe_allow_html=True)
 
@@ -407,7 +474,8 @@ elif st.session_state.pagina_atual == "Em Operação":
         if not df_cd.empty:
             for _, row in df_cd.iterrows():
                 status = obter_status(row)
-                st.markdown(f"<span class='etapa-concluida'>🚛 `{row['Placa do caminhão']}` | {status}</span>", unsafe_allow_html=True)
+                ultima_hora = row.get(status, "")
+                st.markdown(f"<span class='etapa-concluida'>🚛 `{row['Placa do caminhão']}` | {status} ({ultima_hora})</span>", unsafe_allow_html=True)
         else:
             st.markdown("<span class='etapa-bloqueada'>Nenhum caminhão no CD.</span>", unsafe_allow_html=True)
 
