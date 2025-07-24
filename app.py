@@ -159,30 +159,57 @@ def calcular_tempo(inicio, fim):
 
 def calcular_tempos(reg):
     # Função auxiliar para verificar se o valor é válido
-    def is_valid(value):
+    def is_valid_time(value):
         return bool(value) and value not in ["00:00", "00", "0"]
 
     # Fábrica
-    reg["Tempo Espera Doca"] = calcular_tempo(reg.get("Encostou na doca Fábrica", ""), reg.get("Entrada na Fábrica", ""))
-    reg["Tempo de Carregamento"] = calcular_tempo(reg.get("Fim carregamento", ""), reg.get("Início carregamento", ""))
+    reg["Tempo Espera Doca"] = calcular_tempo(
+        reg.get("Encostou na doca Fábrica", ""),
+        reg.get("Entrada na Fábrica", "")
+    )
+    reg["Tempo de Carregamento"] = calcular_tempo(
+        reg.get("Fim carregamento", ""),
+        reg.get("Início carregamento", "")
+    )
 
     # CD
-    reg["Tempo Espera Doca CD"] = calcular_tempo(reg.get("Encostou na doca CD", ""), reg.get("Entrada CD", ""))
-    reg["Tempo de Descarregamento CD"] = calcular_tempo(reg.get("Fim Descarregamento CD", ""), reg.get("Início Descarregamento CD", ""))
+    reg["Tempo Espera Doca CD"] = calcular_tempo(
+        reg.get("Encostou na doca CD", ""),
+        reg.get("Entrada CD", "")
+    )
+    reg["Tempo de Descarregamento CD"] = calcular_tempo(
+        reg.get("Fim Descarregamento CD", ""),
+        reg.get("Início Descarregamento CD", "")
+    )
 
     # Rota
-    reg["Tempo Percurso Para CD"] = calcular_tempo(reg.get("Entrada na Balança CD", ""), reg.get("Saída balança sair Fábrica", ""))
+    reg["Tempo Percurso Para CD"] = calcular_tempo(
+        reg.get("Entrada na Balança CD", ""),
+        reg.get("Saída balança sair Fábrica", "")
+    )
 
     # Tempo Balança Fábrica
-    reg["tempo balança fábrica"] = calcular_tempo(reg.get("Entrada na Fábrica", ""), reg.get("Entrada na Balança Fábrica", ""))
+    reg["tempo balança fábrica"] = calcular_tempo(
+        reg.get("Entrada na Fábrica", ""),
+        reg.get("Entrada na Balança Fábrica", "")
+    )
 
     # Tempo Balança CD
-    reg["tempo balança CD"] = calcular_tempo(reg.get("Entrada CD", ""), reg.get("Entrada na Balança CD", ""))
+    reg["tempo balança CD"] = calcular_tempo(
+        reg.get("Entrada CD", ""),
+        reg.get("Entrada na Balança CD", "")
+    )
 
-    # Tempo Total (só calcula se Saída balança Sair CD estiver preenchido)
-    if is_valid(reg.get("Saída balança Sair CD", "")):
-        reg["Tempo Total"] = calcular_tempo(reg.get("Saída balança Sair CD", ""), reg.get("Entrada na Balança Fábrica", ""))
-        reg["Tempo Total CD"] = calcular_tempo(reg.get("Saída balança Sair CD", ""), reg.get("Entrada na Balança CD", ""))
+    # Tempo Total e Tempo Total CD (só calculados se Saída balança Sair CD estiver preenchido)
+    if is_valid_time(reg.get("Saída balança Sair CD", "")):
+        reg["Tempo Total"] = calcular_tempo(
+            reg.get("Saída balança Sair CD", ""),
+            reg.get("Entrada na Balança Fábrica", "")
+        )
+        reg["Tempo Total CD"] = calcular_tempo(
+            reg.get("Saída balança Sair CD", ""),
+            reg.get("Entrada na Balança CD", "")
+        )
     else:
         reg["Tempo Total"] = ""
         reg["Tempo Total CD"] = ""
