@@ -166,30 +166,6 @@ def converter_para_excel(df):
     buffer.seek(0)
     return buffer
 
-# Função para calcular média de tempos (hh:mm)
-def calcular_media_tempo(series):
-    """
-    Converte uma série de strings 'hh:mm' em minutos, calcula a média e retorna 'hh:mm'
-    Ignora valores vazios, '00:00', 'Inválido', etc.
-    """
-    tempos_minutos = []
-    for valor in series:
-        valor_str = str(valor).strip()
-        if not valor_str or valor_str in ["00:00", "00", "0", "Inválido", "nan"]:
-            continue
-        try:
-            h, m = map(int, valor_str.split(":"))
-            total_min = h * 60 + m
-            if total_min > 0:
-                tempos_minutos.append(total_min)
-        except:
-            continue
-    if not tempos_minutos:
-        return "–"
-    media_min = sum(tempos_minutos) / len(tempos_minutos)
-    h, m = divmod(int(media_min), 60)
-    return f"{h:02d}:{m:02d}"
-
 # Título principal
 st.markdown("<div class='main-header'>🚛 SUZANO - CONTROLE DE CARGA</div>", unsafe_allow_html=True)
 
@@ -227,26 +203,36 @@ if st.session_state.pagina_atual == "Tela Inicial":
     if df_hoje.empty:
         st.info("⏳ Nenhum registro do dia ainda.")
     else:
-        # Calcula a média para cada campo de tempo
         medias = {}
         for campo in campos_calculados:
-            medias[campo] = calcular_media_tempo(df_hoje[campo])
-
+            tempos = []
+            for _, row in df_hoje.iterrows():
+                valor = row[campo]
+                if valor and valor != "Inválido" and ":" in valor:
+                    try:
+                        h, m = map(int, valor.split(":"))
+                        minutos = h * 60 + m
+                        tempos.append(minutos)
+                    except:
+                        continue
+            if tempos:
+                media_min = sum(tempos) / len(tempos)
+                h, m = divmod(int(media_min), 60)
+                medias[campo] = f"{h:02d}:{m:02d}"
+            else:
+                medias[campo] = "–"
         st.markdown("#### 🏭 TEMPOS NA FÁBRICA")
         col1, col2, col3 = st.columns(3)
         col1.metric("🕐 Tempo de Carregamento", medias["Tempo de Carregamento"])
         col2.metric("🚪 Tempo Espera Doca", medias["Tempo Espera Doca"])
         col3.metric("⏱️ Tempo Total", medias["Tempo Total"])
-
         st.markdown("#### 📦 TEMPOS NO CD")
         col4, col5, col6 = st.columns(3)
         col4.metric("📦 Tempo Descarregamento CD", medias["Tempo de Descarregamento CD"])
         col5.metric("🚪 Tempo Espera Doca CD", medias["Tempo Espera Doca CD"])
         col6.metric("⏱️ Tempo Total CD", medias["Tempo Total CD"])
-
         col7, _, _ = st.columns(3)
         col7.metric("🛣️ Tempo Percurso Para CD", medias["Tempo Percurso Para CD"])
-
         col8, col9 = st.columns(2)
         col8.metric("⚖️ Tempo Balança Fábrica", medias["tempo balança fábrica"])
         col9.metric("⚖️ Tempo Balança CD", medias["tempo balança CD"])
