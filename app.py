@@ -324,6 +324,7 @@ elif st.session_state.pagina_atual == "Editar":
                 if anterior_ok:
                     if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}"):
                         reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
+                        calcular_tempos(reg)
                         try:
                             row_idx = idx + 2
                             valores = [reg.get(col, "") or None for col in COLUNAS_ESPERADAS]
