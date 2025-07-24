@@ -142,108 +142,6 @@ def carregar_dados():
         return pd.DataFrame(columns=COLUNAS_ESPERADAS)
 
 # --- FUNÇÕES AUXILIARES ---
-def calcular_tempo(inicio, fim):
-    if not inicio or not fim:
-        return ""
-    try:
-        i = pd.to_datetime(inicio)
-        f = pd.to_datetime(fim)
-        diff = f - i
-        if diff.total_seconds() < 0:
-            return "Inválido"
-        h, rem = divmod(diff.total_seconds(), 3600)
-        m, _ = divmod(rem, 60)
-        return f"{int(h):02d}:{int(m):02d}"
-    except:
-        return ""
-
-def calcular_tempos(reg):
-    # Função auxiliar para verificar se o valor é válido
-    def is_valid_time(value):
-        return bool(value) and value not in ["00:00", "00", "0"]
-
-    # Fábrica
-    if is_valid_time(reg.get("Encostou na doca Fábrica", "")) and is_valid_time(reg.get("Entrada na Fábrica", "")):
-        reg["Tempo Espera Doca"] = calcular_tempo(
-            reg.get("Encostou na doca Fábrica", ""),
-            reg.get("Entrada na Fábrica", "")
-        )
-    else:
-        reg["Tempo Espera Doca"] = ""
-
-    if is_valid_time(reg.get("Fim carregamento", "")) and is_valid_time(reg.get("Início carregamento", "")):
-        reg["Tempo de Carregamento"] = calcular_tempo(
-            reg.get("Fim carregamento", ""),
-            reg.get("Início carregamento", "")
-        )
-    else:
-        reg["Tempo de Carregamento"] = ""
-
-    # CD
-    if is_valid_time(reg.get("Encostou na doca CD", "")) and is_valid_time(reg.get("Entrada CD", "")):
-        reg["Tempo Espera Doca CD"] = calcular_tempo(
-            reg.get("Encostou na doca CD", ""),
-            reg.get("Entrada CD", "")
-        )
-    else:
-        reg["Tempo Espera Doca CD"] = ""
-
-    if is_valid_time(reg.get("Fim Descarregamento CD", "")) and is_valid_time(reg.get("Início Descarregamento CD", "")):
-        reg["Tempo de Descarregamento CD"] = calcular_tempo(
-            reg.get("Fim Descarregamento CD", ""),
-            reg.get("Início Descarregamento CD", "")
-        )
-    else:
-        reg["Tempo de Descarregamento CD"] = ""
-
-    # Rota
-    if is_valid_time(reg.get("Entrada na Balança CD", "")) and is_valid_time(reg.get("Saída balança sair Fábrica", "")):
-        reg["Tempo Percurso Para CD"] = calcular_tempo(
-            reg.get("Entrada na Balança CD", ""),
-            reg.get("Saída balança sair Fábrica", "")
-        )
-    else:
-        reg["Tempo Percurso Para CD"] = ""
-
-    # Tempo Balança Fábrica
-    if is_valid_time(reg.get("Entrada na Fábrica", "")) and is_valid_time(reg.get("Entrada na Balança Fábrica", "")):
-        reg["tempo balança fábrica"] = calcular_tempo(
-            reg.get("Entrada na Fábrica", ""),
-            reg.get("Entrada na Balança Fábrica", "")
-        )
-    else:
-        reg["tempo balança fábrica"] = ""
-
-    # Tempo Balança CD
-    if is_valid_time(reg.get("Entrada CD", "")) and is_valid_time(reg.get("Entrada na Balança CD", "")):
-        reg["tempo balança CD"] = calcular_tempo(
-            reg.get("Entrada CD", ""),
-            reg.get("Entrada na Balança CD", "")
-        )
-    else:
-        reg["tempo balança CD"] = ""
-
-    # Tempo Total e Tempo Total CD (só calculados se Saída balança Sair CD estiver preenchido)
-    if is_valid_time(reg.get("Saída balança Sair CD", "")):
-        if is_valid_time(reg.get("Entrada na Balança Fábrica", "")):
-            reg["Tempo Total"] = calcular_tempo(
-                reg.get("Saída balança Sair CD", ""),
-                reg.get("Entrada na Balança Fábrica", "")
-            )
-        else:
-            reg["Tempo Total"] = ""
-
-        if is_valid_time(reg.get("Entrada na Balança CD", "")):
-            reg["Tempo Total CD"] = calcular_tempo(
-                reg.get("Saída balança Sair CD", ""),
-                reg.get("Entrada na Balança CD", "")
-            )
-        else:
-            reg["Tempo Total CD"] = ""
-    else:
-        reg["Tempo Total"] = ""
-        reg["Tempo Total CD"] = ""
-
 def obter_status(registro):
     for campo in reversed(COLUNAS_ESPERADAS[3:]):
         valor = str(registro.get(campo, "")).strip()
@@ -267,6 +165,30 @@ def converter_para_excel(df):
         df.to_excel(writer, index=False, sheet_name='Dados')
     buffer.seek(0)
     return buffer
+
+# Função para calcular média de tempos (hh:mm)
+def calcular_media_tempo(series):
+    """
+    Converte uma série de strings 'hh:mm' em minutos, calcula a média e retorna 'hh:mm'
+    Ignora valores vazios, '00:00', 'Inválido', etc.
+    """
+    tempos_minutos = []
+    for valor in series:
+        valor_str = str(valor).strip()
+        if not valor_str or valor_str in ["00:00", "00", "0", "Inválido", "nan"]:
+            continue
+        try:
+            h, m = map(int, valor_str.split(":"))
+            total_min = h * 60 + m
+            if total_min > 0:
+                tempos_minutos.append(total_min)
+        except:
+            continue
+    if not tempos_minutos:
+        return "–"
+    media_min = sum(tempos_minutos) / len(tempos_minutos)
+    h, m = divmod(int(media_min), 60)
+    return f"{h:02d}:{m:02d}"
 
 # Título principal
 st.markdown("<div class='main-header'>🚛 SUZANO - CONTROLE DE CARGA</div>", unsafe_allow_html=True)
@@ -305,36 +227,26 @@ if st.session_state.pagina_atual == "Tela Inicial":
     if df_hoje.empty:
         st.info("⏳ Nenhum registro do dia ainda.")
     else:
+        # Calcula a média para cada campo de tempo
         medias = {}
         for campo in campos_calculados:
-            tempos = []
-            for _, row in df_hoje.iterrows():
-                valor = row[campo]
-                if valor and valor != "Inválido" and ":" in valor:
-                    try:
-                        h, m = map(int, valor.split(":"))
-                        minutos = h * 60 + m
-                        tempos.append(minutos)
-                    except:
-                        continue
-            if tempos:
-                media_min = sum(tempos) / len(tempos)
-                h, m = divmod(int(media_min), 60)
-                medias[campo] = f"{h:02d}:{m:02d}"
-            else:
-                medias[campo] = "–"
+            medias[campo] = calcular_media_tempo(df_hoje[campo])
+
         st.markdown("#### 🏭 TEMPOS NA FÁBRICA")
         col1, col2, col3 = st.columns(3)
         col1.metric("🕐 Tempo de Carregamento", medias["Tempo de Carregamento"])
         col2.metric("🚪 Tempo Espera Doca", medias["Tempo Espera Doca"])
         col3.metric("⏱️ Tempo Total", medias["Tempo Total"])
+
         st.markdown("#### 📦 TEMPOS NO CD")
         col4, col5, col6 = st.columns(3)
         col4.metric("📦 Tempo Descarregamento CD", medias["Tempo de Descarregamento CD"])
         col5.metric("🚪 Tempo Espera Doca CD", medias["Tempo Espera Doca CD"])
         col6.metric("⏱️ Tempo Total CD", medias["Tempo Total CD"])
+
         col7, _, _ = st.columns(3)
         col7.metric("🛣️ Tempo Percurso Para CD", medias["Tempo Percurso Para CD"])
+
         col8, col9 = st.columns(2)
         col8.metric("⚖️ Tempo Balança Fábrica", medias["tempo balança fábrica"])
         col9.metric("⚖️ Tempo Balança CD", medias["tempo balança CD"])
@@ -426,7 +338,6 @@ elif st.session_state.pagina_atual == "Editar":
                 if anterior_ok:
                     if st.button(f"⏰ Registrar {campo}", key=f"edit_btn_{idx}_{campo}"):
                         reg[campo] = datetime.now(FUSO_HORARIO).strftime("%Y-%m-%d %H:%M:%S")
-                        calcular_tempos(reg)
                         try:
                             row_idx = idx + 2
                             valores = [reg.get(col, "") or None for col in COLUNAS_ESPERADAS]
