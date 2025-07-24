@@ -143,7 +143,7 @@ def carregar_dados():
 
 # --- FUNÇÕES AUXILIARES ---
 def obter_status(registro):
-    # Verifica de trás para frente, mas ignora campos calculados
+    # Ignora campos calculados ao definir o status
     for campo in reversed(COLUNAS_ESPERADAS[3:]):
         if campo in campos_calculados:
             continue
@@ -224,21 +224,26 @@ if st.session_state.pagina_atual == "Tela Inicial":
                 medias[campo] = f"{h:02d}:{m:02d}"
             else:
                 medias[campo] = "–"
+
+        # 🏭 TEMPOS NA FÁBRICA (com tempo balança fábrica)
         st.markdown("#### 🏭 TEMPOS NA FÁBRICA")
         col1, col2, col3 = st.columns(3)
         col1.metric("🕐 Tempo de Carregamento", medias["Tempo de Carregamento"])
         col2.metric("🚪 Tempo Espera Doca", medias["Tempo Espera Doca"])
-        col3.metric("⏱️ Tempo Total", medias["Tempo Total"])
+        col3.metric("⚖️ Tempo Balança Fábrica", medias["tempo balança fábrica"])
+
+        # 📦 TEMPOS NO CD (com tempo balança CD)
         st.markdown("#### 📦 TEMPOS NO CD")
         col4, col5, col6 = st.columns(3)
         col4.metric("📦 Tempo Descarregamento CD", medias["Tempo de Descarregamento CD"])
         col5.metric("🚪 Tempo Espera Doca CD", medias["Tempo Espera Doca CD"])
-        col6.metric("⏱️ Tempo Total CD", medias["Tempo Total CD"])
-        col7, _, _ = st.columns(3)
-        col7.metric("🛣️ Tempo Percurso Para CD", medias["Tempo Percurso Para CD"])
-        col8, col9 = st.columns(2)
-        col8.metric("⚖️ Tempo Balança Fábrica", medias["tempo balança fábrica"])
-        col9.metric("⚖️ Tempo Balança CD", medias["tempo balança CD"])
+        col6.metric("⚖️ Tempo Balança CD", medias["tempo balança CD"])
+
+        # 📊 TOTAIS (Tempo Total e Tempo Percurso)
+        st.markdown("#### 📊 TOTAIS")
+        col7, col8 = st.columns(2)
+        col7.metric("⏱️ Tempo Total", medias["Tempo Total"])
+        col8.metric("🛣️ Tempo Percurso Para CD", medias["Tempo Percurso Para CD"])
 
     # --- BAIXAR COMO EXCEL ---
     st.markdown("<div class='section-header'>📥 BAIXAR PLANILHA</div>", unsafe_allow_html=True)
